@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Reise- und Materialportal für die schulische Profilreise."
+    />
+    <title>Profilreise · Reiseportal</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="shared/calendar-view.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#fbfcfa" />
+  </head>
+  <body>
+    <svg class="calendar-logo-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="logo-apple" viewBox="0 0 24 24">
+        <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
+      </symbol>
+      <symbol id="logo-google" viewBox="0 0 24 24">
+        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+      </symbol>
+    </svg>
+    <header class="site-header">
+      <div class="brand" aria-label="Profilreise">
+        <span class="brand-mark" aria-hidden="true">PR</span>
+        <span class="brand-title">Profilreise</span>
+      </div>
+      <span class="header-date"></span>
+    </header>
+
+    <main>
+      <section class="submission-timer" aria-label="Countdown zum nächsten Termin">
+        <svg class="submission-timer-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="submission-timer-copy"><strong id="submission-timer-label">Nächster Termin wird geladen …</strong></div>
+        <span class="submission-timer-value" id="submission-timer-value" role="timer" aria-live="off">--:--:--</span>
+      </section>
+      <nav class="page-tabs" aria-label="Bereiche">
+        <button type="button" class="page-tab active" data-page-tab="kalender" aria-current="page">Reiseplan</button>
+        <button type="button" class="page-tab" data-page-tab="ideen">Ideen</button>
+      </nav>
+      <section
+        class="calendar-section"
+        id="kalender"
+        aria-labelledby="kalender-title"
+      >
+        <div class="calendar-intro">
+          <div>
+            <p class="date-line"></p>
+            <h1 id="kalender-title">Reiseplan</h1>
+          </div>
+        </div>
+
+        <details class="calendar-export">
+          <summary>Kalender verknüpfen</summary>
+          <div class="calendar-export-content">
+            <p>
+              Kalenderabo: Neue Termine erscheinen beim nächsten Abruf der
+              Kalender-App. Die private Abo-URL nicht öffentlich teilen.
+            </p>
+            <div class="calendar-export-actions">
+              <button type="button" id="subscribe-calendar">
+                <svg class="calendar-brand-icon" aria-hidden="true"><use href="#logo-apple" /></svg>
+                Abo-URL anzeigen
+              </button>
+              <button type="button" id="export-all-events" disabled>
+                <svg class="calendar-brand-icon" aria-hidden="true"><use href="#logo-apple" /></svg>
+                Termine als Datei speichern (.ics)
+              </button>
+              <a
+                href="https://calendar.google.com/calendar/u/0/r/settings/export"
+                target="_blank"
+                rel="noopener noreferrer"
+                ><svg class="calendar-brand-icon" aria-hidden="true"><use href="#logo-google" /></svg>In Google Kalender importieren</a
+              >
+            </div>
+            <p id="subscription-status" role="status"></p>
+            <input
+              id="subscription-url"
+              aria-label="Private Kalenderabo-URL"
+              readonly
+              hidden
+            />
+            <p>
+              Die Datei kann in Apple Kalender geöffnet oder am Computer in
+              Google Kalender importiert werden. Sie ist eine Momentaufnahme.
+              „Zeit noch offen“ wird ganztägig gespeichert; vorläufige Zeiten
+              sind noch nicht bestätigt.
+            </p>
+          </div>
+        </details>
+
+        <section
+          id="today-summary"
+          aria-label="Heute und nächste Termine"
+        ></section>
+        <section id="offline-day-files" class="offline-day-files" hidden aria-live="polite">
+          <div>
+            <strong id="offline-day-title">Unterlagen offline speichern</strong>
+            <p id="offline-day-copy"></p>
+          </div>
+          <div class="offline-save-control">
+            <button id="offline-day-action" type="button">Offline speichern</button>
+            <button id="offline-save-scope" class="offline-scope-toggle" type="button" value="day" aria-label="Auswahl der Reiseunterlagen öffnen" aria-haspopup="menu" aria-expanded="false" aria-controls="offline-scope-menu" disabled><span aria-hidden="true">▾</span></button>
+            <div id="offline-scope-menu" class="offline-scope-menu" role="menu" aria-label="Reiseunterlagen auswählen" hidden>
+              <button id="offline-scope-day" type="button" role="menuitemradio" aria-checked="true" tabindex="-1">Nächster Reisetag</button>
+              <button id="offline-scope-week" type="button" role="menuitemradio" aria-checked="false" tabindex="-1">Gesamte Woche</button>
+            </div>
+          </div>
+        </section>
+        <!-- The same small symbols as on the cards explain device-local availability. -->
+        <div class="offline-legend" aria-label="Legende Offline-Status">
+          <span><svg viewBox="0 0 28 20" aria-hidden="true"><path d="M14 2v11m-5-5 5 5 5-5M5 13v5h18v-5M3 2l22 17"/></svg>Noch nicht gespeichert</span>
+          <span><svg viewBox="0 0 28 20" aria-hidden="true"><path d="M2 10l5 5L19 3"/></svg>Teilweise gespeichert</span>
+          <span><svg class="offline-complete" viewBox="0 0 28 20" aria-hidden="true"><path d="M2 10l5 5L19 3M13 13l2 2L27 3"/></svg>Offline verfügbar</span>
+        </div>
+        <div class="week-scroll" aria-label="Wochenkalender">
+          <div class="week-grid">
+            <p class="calendar-loading">Kalender wird geladen …</p>
+          </div>
+        </div>
+        <div class="mobile-agenda" aria-label="Termine nach Reisetag">
+          <p class="calendar-loading">Kalender wird geladen …</p>
+        </div>
+        <details id="offline-management" class="offline-management" hidden>
+          <summary>Gespeicherte Unterlagen verwalten</summary>
+          <div class="offline-management-content">
+            <div id="offline-management-days"></div>
+            <p id="offline-management-status" role="status"></p>
+            <button id="offline-remove-all" type="button" aria-label="Alle gespeicherten Unterlagen entfernen" hidden>Alle entfernen</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="ideas-section" id="ideen" aria-labelledby="ideen-title" hidden>
+        <div class="ideas-hero">
+          <div>
+            <span class="ideas-kicker">Profilfahrt · 12.–16. Oktober</span>
+            <h1 id="ideen-title">Ideen</h1>
+            <p>Schlagt etwas für die freie Zeit vor und findet direkt Leute, die mitkommen.</p>
+          </div>
+        </div>
+        <form id="idea-form" class="idea-form">
+          <label for="idea-text">Neue Idee</label>
+          <textarea id="idea-text" name="text" maxlength="500" rows="4" placeholder="Erste Zeile = Titel&#10;Darunter kannst du Details ergänzen. Google-Maps-Link einfach einfügen." required></textarea>
+          <div class="idea-form-grid">
+            <label>Dein Name<select id="idea-author" name="author" required><option value="">Name auswählen</option></select></label>
+            <label>Tag<select id="idea-date" name="date" required>
+              <option value="2026-10-12">Montag · 12. Oktober</option>
+              <option value="2026-10-13">Dienstag · 13. Oktober</option>
+              <option value="2026-10-14">Mittwoch · 14. Oktober</option>
+              <option value="2026-10-15">Donnerstag · 15. Oktober</option>
+              <option value="2026-10-16">Freitag · 16. Oktober</option>
+            </select></label>
+            <label>Uhrzeit<select id="idea-time" name="time" required><option value="">Freizeit auswählen</option></select></label>
+            <label>Ort <span>(optional)</span><input id="idea-place" name="place" maxlength="160" placeholder="z. B. Markt, Café …" /></label>
+          </div>
+          <p id="idea-free-time-hint" class="idea-free-time-hint"></p>
+          <div class="idea-form-actions"><span>Bis zu 500 Zeichen</span><button type="submit">Idee eintragen</button></div>
+        </form>
+        <p id="ideas-status" class="ideas-status" role="status" aria-live="polite"></p>
+        <div id="ideas-list" class="ideas-list"></div>
+      </section>
+
+      <dialog class="idea-delete-dialog" id="idea-delete-dialog" aria-labelledby="idea-delete-title">
+        <form id="idea-delete-form">
+          <h2 id="idea-delete-title">Idee löschen?</h2>
+          <p id="idea-delete-name"></p>
+          <label for="idea-delete-password">Adminpasswort</label>
+          <input id="idea-delete-password" type="password" autocomplete="current-password" required />
+          <p id="idea-delete-status" role="status" aria-live="polite"></p>
+          <div class="idea-delete-actions">
+            <button id="idea-delete-cancel" type="button">Abbrechen</button>
+            <button id="idea-delete-confirm" type="submit">Idee löschen</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog
+        class="material-dialog"
+        id="material-dialog"
+        aria-labelledby="dialog-title"
+      >
+        <div class="dialog-bar">
+          <div>
+            <span id="dialog-kind">Termin</span>
+            <h2 id="dialog-title">Details</h2>
+          </div>
+          <button
+            class="dialog-close"
+            type="button"
+            aria-label="Materialansicht schließen"
+          >
+            ×
+          </button>
+        </div>
+        <p id="dialog-description" class="dialog-description" hidden></p>
+        <div class="event-extras"></div>
+        <section id="event-materials" class="event-materials" aria-label="Dateien">
+          <p id="materials-status" class="materials-status" role="status"></p>
+          <div class="resource-list" id="resource-list"></div>
+          <button id="event-offline-save" class="event-offline-save" type="button" hidden>Offline verfügbar machen</button>
+          <p id="event-offline-available" class="event-offline-available" hidden>Offline verfügbar</p>
+          <p id="event-offline-progress" class="materials-status" role="status"></p>
+          <button class="upload-toggle" id="upload-toggle" type="button">
+            <span aria-hidden="true">+</span> Dateien hinzufügen
+          </button>
+          <form class="upload-form" id="upload-form" hidden>
+          <div class="upload-heading">
+            <strong>Dateien hinzufügen</strong><span>max. ∞ MB</span>
+          </div>
+          <label class="file-field"
+            ><span>Dateien auswählen</span
+            ><input id="upload-file" name="file" type="file" multiple required
+          /></label>
+          <label class="password-field"
+            ><span>Portalpasswort erneut eingeben</span
+            ><input
+              id="upload-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+          /></label>
+          <label class="password-field"
+            ><span>Löschpasswort festlegen</span
+            ><input
+              id="upload-delete-password"
+              name="deletePassword"
+              type="password"
+              autocomplete="new-password"
+              maxlength="128"
+              required
+          /></label>
+          <button type="submit" id="upload-submit">Hochladen</button>
+          <p
+            class="upload-status"
+            id="upload-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          </form>
+        </section>
+      </dialog>
+
+      <dialog
+        class="event-dialog"
+        id="event-dialog"
+        aria-labelledby="event-dialog-title"
+      >
+        <div class="dialog-bar">
+          <h2 id="event-dialog-title">Termin</h2>
+          <button
+            class="event-dialog-close"
+            type="button"
+            aria-label="Termin schließen"
+          >
+            ×
+          </button>
+        </div>
+        <div class="event-extras"></div>
+      </dialog>
+
+      <dialog
+        class="delete-dialog"
+        id="delete-dialog"
+        aria-labelledby="delete-title"
+      >
+        <form id="delete-form">
+          <span class="delete-kicker">DATEI ENTFERNEN</span>
+          <h2 id="delete-title">Datei löschen?</h2>
+          <p id="delete-filename"></p>
+          <label
+            ><span>Löschpasswort oder Adminpasswort</span
+            ><input
+              id="delete-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+          /></label>
+          <p
+            class="delete-status"
+            id="delete-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <div class="delete-actions">
+            <button class="delete-cancel" type="button">Abbrechen</button
+            ><button class="delete-confirm" type="submit">
+              Dauerhaft löschen
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </main>
+
+    <footer>
+      <span class="trip-title">Profilreise</span><span id="published-at"></span
+      ><span id="offline-status" role="status"></span
+      ><a id="portal-logout" href="/__logout"
+        >Abmelden und Offline-Daten löschen</a
+      >
+    </footer>
+    <div id="connection-status-bar" class="connection-status-bar" role="status" aria-live="polite" hidden>
+      <span id="connection-status-text"></span>
+    </div>
+    <script src="/shared/openstreetmap.js"></script>
+    <script src="shared/calendar-model.js"></script>
+    <script src="shared/calendar-export.js"></script>
+    <script src="shared/calendar-view.js"></script>
+    <script src="script.js"></script>
+    <script src="shared/shared-notes.js"></script>
+    <script src="shared/ideas-v2.js"></script>
+    <script src="shared/offline-files.js"></script>
+    <script src="shared/connectivity-status.js"></script>
+    <script src="shared/ui-copy.js"></script>
+    <script src="deep-link.js"></script>
+  </body>
+</html>

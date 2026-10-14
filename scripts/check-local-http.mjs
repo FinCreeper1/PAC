@@ -1,0 +1,16 @@
+if(process.env.CONFIRM_ISOLATED_TEST_STORAGE!=='1') throw new Error('Diese schreibende Prüfung benötigt einen separaten Wolke-Testordner und CONFIRM_ISOLATED_TEST_STORAGE=1.');
+import assert from 'node:assert/strict';
+const base='http://127.0.0.1:8791';
+const login=async(path,password)=>{const r=await fetch(base+path,{method:'POST',body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,303);return r.headers.get('set-cookie').split(';')[0];};
+const cookie=await login('/__login','local-test');
+const calendar=await (await fetch(base+'/data/calendar.json',{headers:{cookie}})).json(),event=calendar.events[0].id;
+const admin=await login('/admin/login','local-admin');
+let r=await fetch(base+'/api/admin/calendar',{headers:{cookie:admin}});assert.equal(r.status,200);const state=await r.json();
+r=await fetch(base+'/api/admin/calendar',{method:'PUT',headers:{cookie:admin,'content-type':'application/json','x-csrf-token':state.csrf},body:JSON.stringify(state)});assert.equal(r.status,200,await r.clone().text());
+r=await fetch(base+'/api/materials?project='+event,{method:'PUT',headers:{cookie,'x-portal-password':btoa('local-test'),'x-delete-password':btoa('owner'),'x-file-name':btoa('integration.txt')},body:'Runtime upload'});assert.equal(r.status,201,await r.clone().text());const {file}=await r.json();
+r=await fetch(base+`/api/files/${event}/${file.id}`,{headers:{cookie}});assert.equal(await r.text(),'Runtime upload');
+const manifest=await (await fetch(base+'/api/offline-manifest',{headers:{cookie}})).json();assert.ok(manifest.files.some(f=>f.id===file.id));
+const subscription=await (await fetch(base+'/api/calendar-subscription',{headers:{cookie}})).json();
+r=await fetch(base+subscription.path);assert.equal(r.status,200);assert.match(await r.text(),/ATTACH/);
+r=await fetch(base+'/api/materials',{method:'DELETE',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({project:event,id:file.id,password:'owner'})});assert.equal(r.status,200);
+console.log('Real runtime HTTP checks passed: portal/admin login, calendar publication, Nextcloud upload/download/delete, offline manifest, signed calendar feed.');

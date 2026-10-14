@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 2,
+  "days": [
+    {
+      "isoDate": "2030-05-06"
+    }
+  ],
+  "timeSlots": [
+    "08:00",
+    "09:00",
+    "10:00",
+    "11:00",
+    "12:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+    "18:00",
+    "19:00"
+  ],
+  "events": [
+    {
+      "id": "demo-start",
+      "day": 1,
+      "title": "Gemeinsam starten",
+      "location": "Treffpunkt",
+      "startTime": "09:00",
+      "endTime": "10:00",
+      "timing": "scheduled",
+      "status": "confirmed",
+      "type": "program",
+      "display": "normal",
+      "latitude": 53.55,
+      "longitude": 9.99,
+      "showMap": false
+    },
+    {
+      "id": "demo-freizeit",
+      "day": 1,
+      "title": "Freizeit",
+      "location": "Vor Ort",
+      "startTime": "16:00",
+      "endTime": "18:00",
+      "timing": "scheduled",
+      "status": "confirmed",
+      "type": "free",
+      "display": "normal",
+      "latitude": 53.55,
+      "longitude": 9.99,
+      "showMap": false
+    }
+  ]
+}

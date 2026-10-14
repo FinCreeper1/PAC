@@ -1,0 +1,12 @@
+# Der Deploy-to-Cloudflare-Assistent erkennt die folgenden Secret-Namen.
+# Im Assistenten eigene Werte und die vorhandenen Wolke-Zugangsdaten eintragen.
+PORTAL_PASSWORD=change-me
+ADMIN_PASSWORD=change-me-too
+SESSION_SECRET=replace-with-at-least-32-random-bytes
+CALENDAR_FEED_SECRET=replace-with-independent-random-secret
+# Optional: nach dem Deployment als Secret hinzufügen.
+# APPLE_MAPS_TOKEN=
+NEXTCLOUD_WEBDAV_URL=https://cloud.example.org/remote.php/dav/files/your-user
+NEXTCLOUD_USERNAME=your-user
+NEXTCLOUD_APP_PASSWORD=replace-with-nextcloud-app-password
+NEXTCLOUD_ROOT=Profilreise

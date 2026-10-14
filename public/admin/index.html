@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reiseplan · Administration</title>
+    <link rel="stylesheet" href="/admin/admin.css" />
+    <link rel="stylesheet" href="/shared/calendar-view.css" />
+    <script src="/shared/openstreetmap.js" defer></script>
+    <script src="/shared/calendar-model.js" defer></script>
+    <script src="/shared/calendar-view.js" defer></script>
+    <script src="/admin/admin.js" defer></script>
+    <script src="/admin/route-editor.js" defer></script>
+  </head>
+  <body data-view="list">
+    <header>
+      <h1>Reiseplan bearbeiten</h1>
+      <a href="/" target="_blank" rel="noopener">Reiseplan öffnen ↗</a
+      ><button id="logout">Abmelden</button>
+    </header>
+    <main>
+      <div class="toolbar">
+        <div class="save-summary">
+          <strong id="save-state" role="status">Kalender wird geladen …</strong>
+          <span>Speichern macht deine Änderungen für alle Teilnehmenden sichtbar.</span>
+        </div>
+        <button type="button" id="new-event" disabled>Neuer Termin</button
+        ><button id="undo" disabled>Letzte Änderung zurücknehmen</button
+        ><button id="save" disabled>Änderungen speichern</button>
+      </div>
+      <p id="status" role="status" aria-live="polite">
+        Kalender wird geladen …
+      </p>
+      <div class="view-toolbar" aria-label="Kalenderansicht">
+        <div class="view-switch" role="group" aria-label="Ansicht wählen">
+          <button id="view-list" type="button" aria-pressed="true">Einzelne Tage</button>
+          <button id="view-week" type="button" aria-pressed="false">Ganze Woche</button>
+        </div>
+        <details class="quick-help"><summary>Wie funktioniert das?</summary><ol><li>Wähle einen Tag und klicke auf einen Termin.</li><li>Ändere die Angaben oder lege einen neuen Termin an.</li><li>Klicke auf „Speichern – für alle sichtbar“.</li></ol><p>Verschobene oder gelöschte Termine speicherst du mit „Änderungen speichern“ oben auf der Seite.</p></details>
+      </div>
+      <div class="workspace">
+        <section class="mobile-schedule" aria-label="Termine nach Tag">
+          <h2>Termine</h2><label for="agenda-day">Welchen Tag möchtest du bearbeiten?</label
+          ><div class="day-navigation"><button id="previous-day" type="button" aria-label="Vorheriger Tag" disabled>←</button><select id="agenda-day"></select><button id="next-day" type="button" aria-label="Nächster Tag" disabled>→</button></div>
+          <label for="event-search">Termine an diesem Tag suchen</label>
+          <input id="event-search" type="search" placeholder="Titel, Ort oder Verantwortliche" />
+          <button id="clear-search" type="button" hidden>Suche löschen</button><p id="agenda-count" role="status"></p>
+          <div id="agenda"></div>
+        </section>
+        <section class="schedule" aria-label="Wochenraster">
+          <div id="calendar"></div>
+        </section>
+        <aside id="editor-panel">
+          <button type="button" id="back-to-agenda">
+            Zurück zur Tagesliste
+          </button>
+          <h2 id="editor-title" tabindex="-1">Termin auswählen</h2>
+          <p id="editor-empty">Wähle einen Termin aus der Liste oder lege mit „Neuer Termin“ einen Programmpunkt an.</p>
+          <form id="editor" hidden>
+            <p class="editor-help">Fülle die Angaben aus. Felder mit „freiwillig“ kannst du leer lassen.</p>
+            <p id="editor-message" role="alert" tabindex="-1" hidden></p>
+            <h3>Was findet statt?</h3>
+            <label>Name des Termins<input name="title" required maxlength="200" placeholder="Zum Beispiel: Besuch im Museum" /></label>
+            <label>Art des Termins<select name="type">
+              <option value="program">Besichtigung, Vortrag oder anderes Programm</option>
+              <option value="travel">Fahrt oder Weg</option>
+              <option value="event">Treffpunkt, Aufstehen oder Organisatorisches</option>
+              <option value="free">Freizeit</option>
+            </select></label>
+            <h3>Wann findet es statt?</h3>
+            <label>Tag<select name="day"></select></label>
+            <label>Steht die Uhrzeit schon fest?<select name="timing">
+              <option value="scheduled">Ja, Uhrzeit eintragen</option>
+              <option value="unscheduled">Nein, wird noch bekannt gegeben</option>
+            </select></label>
+            <div id="time-fields" class="pair">
+              <label>Von<input type="time" name="startTime" required /></label>
+              <label>Bis<input type="time" name="endTime" required /></label>
+            </div>
+            <input name="time" type="hidden" />
+            <p id="time-help" hidden>Im Reiseplan steht „Zeit noch offen“. Du kannst die Uhrzeit später ergänzen.</p>
+            <label id="confirmation-label">Ist der Termin bestätigt?<select name="status">
+              <option value="provisional">Noch nicht – als vorläufig anzeigen</option>
+              <option value="confirmed">Ja, der Termin ist bestätigt</option>
+            </select></label>
+            <h3>Wo treffen wir uns?</h3>
+            <label>Ort oder Adresse<input name="location" required placeholder="Zum Beispiel: Museum Ludwig, Köln" /></label>
+            <button type="button" id="search-place">Ort suchen</button>
+            <p id="place-help">Gib den Ort ein, klicke auf „Ort suchen“ und wähle den passenden Treffer.</p>
+            <p>OpenStreetMap-Suchergebnisse: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a>. Suche über Nominatim; keine vertraulichen Angaben eingeben.</p>
+            <div id="search-results" aria-live="polite"></div>
+            <div id="place-preview" role="region" aria-label="Karte des ausgewählten Ortes" hidden></div>
+            <p id="place-preview-status" role="status" hidden></p>
+            <a id="maps-link" target="_blank" rel="noopener">Ort auf der Karte prüfen ↗</a>
+            <label><input name="showMap" type="checkbox" checked /> Karte im Reiseplan anzeigen</label>
+            <details class="form-section">
+              <summary>Genauen Kartenpunkt von Hand eingeben</summary>
+              <p>Nur nötig, wenn du den Ort nicht über die Suche findest.</p>
+              <div class="pair">
+                <label>Breitengrad<input type="number" step="any" min="-90" max="90" name="latitude" /></label>
+                <label>Längengrad<input type="number" step="any" min="-180" max="180" name="longitude" /></label>
+              </div>
+            </details>
+            <details class="form-section">
+              <summary>Weitere Informationen hinzufügen (freiwillig)</summary>
+              <label>Weitere Informationen<textarea name="note" placeholder="Beschreibung, wichtige Hinweise oder was mitzubringen ist."></textarea></label>
+              <label>Ansprechperson<input name="responsible" maxlength="200" /></label>
+            </details>
+            <details class="form-section">
+              <summary>Aussehen im Wochenplan (freiwillig)</summary>
+              <label>Spalte<select name="lane">
+                <option value="">Automatisch</option>
+                <option value="left">Links</option>
+                <option value="right">Rechts</option>
+              </select></label>
+              <label>Darstellung<select name="display">
+                <option value="normal">Normal</option>
+                <option value="compact">Kompakt</option>
+              </select></label
+            >
+            </details>
+            <details class="form-section">
+            <summary>Zwischenstopps einer Fahrt (freiwillig)</summary>
+            <p>
+              Haltepunkte verschieben oder mit „Nach oben“ und „Nach unten“ sortieren. Ohne Punkte
+              wird nur der Terminort angezeigt.
+            </p>
+            <div id="points"></div>
+            <button type="button" id="add-point">Haltepunkt hinzufügen</button>
+            <details>
+              <summary>Technische Angaben zum Routenverlauf</summary>
+              <p>
+                Eine Zeile je Koordinate: Breitengrad, Längengrad. Leer lassen,
+                um Haltepunkte direkt zu verbinden.
+              </p>
+              <textarea
+                id="geometry"
+                rows="7"
+                spellcheck="false"
+                aria-label="Routenverlauf"
+              ></textarea>
+            </details>
+            <p>
+              Bei geänderter Reihenfolge bitte den genauen Verlauf anpassen oder
+              leeren.
+            </p>
+            </details>
+            <div class="editor-actions"><p>Der gesamte geänderte Reiseplan wird gespeichert.</p>
+              <button id="save-event" type="submit" disabled>Speichern – für alle sichtbar</button>
+              <button type="button" id="cancel-event">Abbrechen</button>
+            </div>
+            <button type="button" id="delete-event" hidden>Termin löschen</button>
+          </form>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

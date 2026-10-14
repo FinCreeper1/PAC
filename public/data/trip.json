@@ -1,0 +1,14 @@
+{
+  "id": "pac-demo",
+  "title": "PAC · Beispielreise",
+  "startDate": "2030-05-06",
+  "endDate": "2030-05-06",
+  "origin": "Start",
+  "destination": "Ziel",
+  "website": "https://example.org",
+  "timeZone": "Europe/Berlin",
+  "participants": [
+    "Person A",
+    "Person B"
+  ]
+}

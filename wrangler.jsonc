@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pac",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PORTAL",
+        "class_name": "Portal"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Portal"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

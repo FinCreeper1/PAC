@@ -1,0 +1,52 @@
+{
+  "name": "pac",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "test": "node --test tests/*.test.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.0"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.11.2"
+  },
+  "cloudflare": {
+    "bindings": {
+      "PORTAL": {
+        "description": "Koordiniert Schreibzugriffe und speichert technische Sitzungen. Die Anwendungsdaten bleiben in Nextcloud."
+      },
+      "PORTAL_PASSWORD": {
+        "description": "Passwort für Teilnehmende. Einen eigenen Wert wählen."
+      },
+      "ADMIN_PASSWORD": {
+        "description": "Separates Passwort für die Reiseleitung."
+      },
+      "SESSION_SECRET": {
+        "description": "Zufälliges Geheimnis für Sitzungen, mindestens 32 Bytes; z. B. mit `openssl rand -hex 32` erzeugen."
+      },
+      "CALENDAR_FEED_SECRET": {
+        "description": "Eigenständiges zufälliges Geheimnis für Kalenderabos. Zum Beibehalten vorhandener Feed-Token denselben Wert wie im bisherigen Portal verwenden."
+      },
+      "NEXTCLOUD_WEBDAV_URL": {
+        "description": "Vorhandene HTTPS-WebDAV-URL aus `nextcloud_webdav_url`, einschließlich Benutzerpfad. Keine öffentliche Freigabe-URL."
+      },
+      "NEXTCLOUD_USERNAME": {
+        "description": "Vorhandener Nextcloud-Benutzer aus `nextcloud_username`."
+      },
+      "NEXTCLOUD_APP_PASSWORD": {
+        "description": "App-Passwort des vorhandenen Nextcloud-Benutzers aus `nextcloud_app_password`."
+      },
+      "NEXTCLOUD_ROOT": {
+        "description": "Vorhandener Stammordner aus `nextcloud_root`. Derselbe Ordner erhält Zugriff auf die bisherigen Wolkendaten."
+      },
+      "APPLE_MAPS_TOKEN": {
+        "description": "Optional: gültiges Apple-Maps-Token. Nach dem Deployment unter Variables and Secrets hinzufügen, wenn Apple Maps verwendet werden soll."
+      }
+    }
+  },
+  "description": "PAC – Reiseplanung mit Cloudflare Workers und bestehendem Nextcloud-Speicher"
+}
