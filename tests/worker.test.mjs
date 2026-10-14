@@ -128,3 +128,10 @@ test('legacy cloud notes are readable and shared notes keep the existing key',as
  assert.equal((await (await call('/api/notes?event='+event.id,{headers:{cookie}})).json()).note,'Bestehende Notiz');
  const shared=await (await call('/api/shared-note?event='+event.id,{headers:{cookie}})).json();assert.equal(shared.revision,7);assert.equal(shared.text,'Gemeinsame Wolkennotiz');
 });
+
+test('unconfigured claimed deployment returns setup guidance instead of crashing',async()=>{
+ const env={PORTAL_PASSWORD:'test',ADMIN_PASSWORD:'test',SESSION_SECRET:'test'};
+ const portal=new Portal({storage:{get:async()=>null}},env);
+ const response=await portal.fetch(new Request('https://portal.test/'));
+ assert.equal(response.status,503);assert.match((await response.json()).error,/Variables and Secrets/);
+});

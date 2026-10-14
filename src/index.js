@@ -23,7 +23,7 @@ function decodeHeader(request,name) {
 
 // One object serializes writes; application data stays exclusively in Nextcloud.
 export class Portal {
-  constructor(state,env) {this.state=state;this.env=env;this.queue=Promise.resolve();this.cloud=env.cloudStorage || new NextcloudStorage(env);}
+  constructor(state,env) {this.state=state;this.env=env;this.queue=Promise.resolve();this.cloud=env.cloudStorage || null;}
   async fetch(request) {
     // A promise queue serializes requests without closing the input gate:
     // closing that gate while streaming an upload can prevent its body arriving.
@@ -67,7 +67,8 @@ export class Portal {
   }
   async handle(request) {
     const env=this.env, url=new URL(request.url), path=url.pathname, method=request.method;
-    if(!env.PORTAL_PASSWORD || !env.ADMIN_PASSWORD || !env.SESSION_SECRET) return json({error:'Portal-Zugang ist noch nicht vollständig konfiguriert.'},503);
+    if(!env.PORTAL_PASSWORD || !env.ADMIN_PASSWORD || !env.SESSION_SECRET || (!this.cloud && ['NEXTCLOUD_WEBDAV_URL','NEXTCLOUD_USERNAME','NEXTCLOUD_APP_PASSWORD','NEXTCLOUD_ROOT'].some(key=>!env[key]))) return json({error:'Portal- und Wolke-Zugang bitte in Cloudflare unter Settings → Variables and Secrets einrichten.'},503);
+    this.cloud ||= new NextcloudStorage(env);
     if(!['GET','HEAD','OPTIONS'].includes(method) && request.headers.get('origin') && request.headers.get('origin')!==url.origin) return json({error:'Fremder Ursprung.'},403);
     const session=await this.adminSession(request);
     if(path==='/admin/login' && method==='POST') {

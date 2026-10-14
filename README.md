@@ -62,6 +62,14 @@ Der Assistent liest die erforderlichen Secret-Namen aus `.dev.vars.example` und 
 
 Build-Befehl: `npm run build`. Deploy-Befehl: `npm run deploy`. Der Ordner enthält seine Abhängigkeiten und alle Anwendungsdateien, sodass der Build keine Dateien aus dem übergeordneten PHP-Projekt benötigt.
 
+## Ohne GitHub-Verknüpfung: Deploy & Claim
+
+Mit `npx wrangler deploy --temporary` lässt sich die Vorlage in einem temporären Cloudflare-Konto bereitstellen. Wrangler fordert vorher die Zustimmung zu Cloudflares Nutzungsbedingungen und Datenschutzerklärung. Der anschließend erzeugte persönliche Claim-Link muss innerhalb von 60 Minuten vollständig eingelöst werden, damit Konto und Worker erhalten bleiben. Dafür ist nur eine Cloudflare-Anmeldung erforderlich.
+
+Den Claim-Link nicht öffentlich teilen: Er erlaubt die Übernahme des Kontos. Nach der Übernahme die Portal- und Nextcloud-Secrets unter **Settings → Variables and Secrets** einrichten. Bis dahin antwortet PAC mit HTTP 503 und einem Einrichtungshinweis. Wolken-Zugangsdaten werden nicht in die öffentliche Vorlage eingebaut.
+
+Die Bereitstellung benötigt keine GitHub-Anbindung. Der offizielle Deploy-Button bleibt als zusätzliche Installationsmöglichkeit verfügbar.
+
 ## Bereitstellen per CLI
 
 ```sh
