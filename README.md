@@ -2,7 +2,7 @@
 
 **[PAC einrichten – ohne GitHub-Verknüpfung](https://pac-install.linusleupold.workers.dev)**
 
-Dieser dauerhafte Link erstellt für jeden Nutzer eine eigene Instanz mit einem persönlichen Cloudflare-Übernahme-Link.
+Die direkte Cloudflare-Anmeldung wird derzeit freigeschaltet. Anschließend wählen Nutzer ihr eigenes Konto und bestätigen die Erstellung eines PAC-Workers. GitHub ist dafür nicht erforderlich. Details zur noch nötigen OAuth-Registrierung stehen in `installer/README.md`.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FFinCreeper1%2FPAC)
 

@@ -1,5 +1,5 @@
-import {beginProof,advanceProof} from './proof.js';
-import {api,validateAccount,deployPac,TERMS,PRIVACY} from './cloudflare.js';
+import {api,deployPac} from './cloudflare.js';
+import {beginLogin,exchangeCode} from './oauth.js';
 const json=(value,status=200)=>Response.json(value,{status,headers:{'cache-control':'no-store'}});
 const hour=3600000;
 export class InstallLimits {
@@ -23,81 +23,65 @@ export class InstallLimits {
 }
 export class InstallJob {
  constructor(state,env){this.state=state;this.env=env;}
- async fetch(request) {
-  const url=new URL(request.url);
-  return this.state.blockConcurrencyWhile(async()=>{
-   let job=await this.state.storage.get('job');
-   if(url.pathname==='/session'){
-    if(!job){job={stage:'idle',csrf:crypto.randomUUID(),createdAt:Date.now(),expiresAt:Date.now()+hour};await this.state.storage.put('job',job);await this.state.storage.setAlarm(job.expiresAt);}
-    if(job.expiresAt<=Date.now())return json({error:'Einrichtung abgelaufen. Bitte neu starten.'},410);
-    return json({csrf:job.csrf});
-   }
-   if(!job||job.expiresAt<=Date.now())return json({error:'Einrichtung abgelaufen. Bitte die Seite neu laden.'},410);
-   if(url.pathname==='/start'){
-    const body=await request.json();
-    if(body.csrf!==job.csrf||body.acceptTerms!==true||body.acceptPrivacy!==true)return json({error:'Bitte beiden Cloudflare-Bedingungen zustimmen.'},403);
-    if(job.stage!=='idle')return this.status(job);
-    const limiter=await this.env.LIMITS.get(this.env.LIMITS.idFromName('limits')).fetch('https://internal/',{method:'POST',body:JSON.stringify({key:body.rateKey})});
-    if(!limiter.ok)return limiter;
-    job={...job,stage:'challenge',startedAt:Date.now(),expiresAt:Date.now()+hour};
-    await this.state.storage.put('job',job);await this.state.storage.setAlarm(Date.now()+100);return this.status(job);
-   }
-   if(url.pathname==='/status')return this.status(job);
-   if(url.pathname==='/forget'&&request.method==='POST'){
-    const {csrf}=await request.json();if(csrf!==job.csrf)return json({},403);
-    if(!['ready','failed','idle'].includes(job.stage))return json({error:'Die Einrichtung läuft noch.'},409);
-    await this.state.storage.deleteAll();await this.state.storage.deleteAlarm();return json({forgotten:true});
-   }
-   return json({},404);
-  });
- }
- status(job) {
-  return json({stage:job.stage,progress:job.progress||0,...(job.stage==='ready'?{claimUrl:job.claimUrl,previewUrl:job.previewUrl,expiresAt:job.expiresAt}:{}),...(job.stage==='failed'?{error:job.error}:{}),expiresAt:job.expiresAt});
- }
- async alarm() {
-  let job=await this.state.storage.get('job');if(!job)return;
-  if(job.expiresAt<=Date.now()){await this.state.storage.deleteAll();return;}
-  const requestApi=this.env.requestApi||api;
-  try {
-   if(job.stage==='idle'||job.stage==='ready'||job.stage==='failed'){await this.state.storage.setAlarm(job.expiresAt);return;}
-   if(job.stage==='challenge') {
-    const challenge=await requestApi('/provisioning/previews/challenge',{method:'POST',body:{},stage:'challenge'});
-    await this.state.storage.put('proof',beginProof(challenge));job.stage='solving';
-   } else if(job.stage==='solving') {
-    const current=await this.state.storage.get('proof'),step=advanceProof(current,this.env.proofBudget||500000);
-    if(step.block.length)await this.state.storage.put('proof-block:'+String(current.blocks).padStart(5,'0'),step.block);
-    await this.state.storage.put('proof',step.progress);job.progress=Math.floor(65*step.progress.segment/step.progress.k);
-    if(step.done)job.stage='provision';
-   } else if(job.stage==='provision') {
-    const proof=await this.state.storage.get('proof'),blocks=await this.state.storage.list({prefix:'proof-block:'});
-    const checkpoints=Buffer.concat([Buffer.from(proof.first,'base64'),...[...blocks.values()].map(value=>Buffer.from(value))]).toString('base64');
-    // Account creation has no idempotency key. Never repeat an ambiguous POST.
-    job.stage='creating';await this.state.storage.put('job',job);
-    const result=await requestApi('/provisioning/previews',{method:'POST',body:{termsOfService:TERMS,privacyPolicy:PRIVACY,acceptTermsOfService:'yes',challengeToken:proof.challengeToken,solution:{checkpoints}},stage:'provision'});
-    const secret=validateAccount(result);await this.state.storage.put('secret',{accountId:secret.accountId,apiToken:secret.apiToken});
-    job={...job,stage:'uploading',claimUrl:secret.claimUrl,expiresAt:secret.expiresAt,progress:75};
-    await this.state.storage.delete(['proof',...[...blocks.keys()]]);
-   } else if(job.stage==='creating') {
-    throw new Error('account-creation-uncertain');
-   } else if(job.stage==='uploading') {
-    const secret=await this.state.storage.get('secret');
-    job.previewUrl=await (this.env.deployPac||deployPac)(secret,this.env.PAC_PAYLOAD);
-    job.stage='ready';job.progress=100;
-    // No persistent deployment access remains after delivering the result.
-    await this.state.storage.delete('secret');
-   }
-   await this.state.storage.put('job',job);await this.state.storage.setAlarm(['ready','failed'].includes(job.stage)?job.expiresAt:Date.now()+100);
-  } catch(error) {
-   const status=error.status;
-   if(['challenge','uploading'].includes(job.stage)&&(job.retries||0)<2&&(!status||status===429||status>=500)){
-    job.retries=(job.retries||0)+1;await this.state.storage.put('job',job);await this.state.storage.setAlarm(Date.now()+2000*job.retries);return;
-   }
-
-   const message=status===429?'Cloudflare begrenzt gerade neue Konten. Bitte später erneut versuchen.':status===403?'Cloudflare hat die Einrichtung abgelehnt. Bitte später erneut versuchen.':error.message==='account-creation-uncertain'?'Die Kontoerstellung wurde unterbrochen. Bitte neu starten.':'Die Einrichtung konnte nicht abgeschlossen werden. Bitte erneut versuchen.';
-   // Do not log API bodies, account tokens or claim URLs.
-   await this.state.storage.deleteAll();
-   await this.state.storage.put('job',{stage:'failed',csrf:job.csrf,expiresAt:Date.now()+600000,error:message});
-   await this.state.storage.setAlarm(Date.now()+600000);
+ async fetch(request){return this.state.blockConcurrencyWhile(async()=>{
+  const path=new URL(request.url).pathname;
+  let job=await this.state.storage.get('job');
+  if(path==='/session'){
+   // Old temporary-account sessions cannot continue under the OAuth installer.
+   if(job&&!job.version){await this.state.storage.deleteAll();job=null;}
+   if(!job){job={version:2,stage:'idle',csrf:crypto.randomUUID(),expiresAt:Date.now()+hour};await this.save(job);}
+   if(job.expiresAt<=Date.now())return json({error:'Sitzung abgelaufen. Bitte neu laden.'},410);
+   return json({csrf:job.csrf,configured:Boolean(this.env.OAUTH_CLIENT_ID)});
   }
+  if(!job||job.expiresAt<=Date.now())return json({error:'Sitzung abgelaufen. Bitte neu laden.'},410);
+  if(path==='/status')return this.status(job);
+  const body=await request.json();
+  if(path==='/callback'){
+   const login=await this.state.storage.get('login');
+   if(job.stage!=='authorizing'||!login||body.state!==login.state||login.expiresAt<=Date.now())return json({error:'Anmeldung ungültig oder abgelaufen. Bitte neu beginnen.'},403);
+   // Consume state before exchanging the single-use authorization code.
+   await this.state.storage.delete('login');
+   if(body.error||typeof body.code!=='string'||body.code.length>4096)return this.fail(job,'Die Cloudflare-Anmeldung wurde nicht abgeschlossen.');
+   try{
+    const secret=await (this.env.exchangeCode||exchangeCode)(this.env.OAUTH_CLIENT_ID,login,body.code);
+    const accounts=await (this.env.requestApi||api)('/accounts?per_page=50',{token:secret.apiToken,stage:'accounts'});
+    job.accounts=accounts.filter(a=>/^[a-f0-9]{32}$/.test(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name}));
+    if(!job.accounts.length)throw new Error('no-accounts');
+    await this.state.storage.put('secret',secret);job.stage='authorized';job.expiresAt=secret.expiresAt;await this.save(job);return json({ok:true});
+   }catch{return this.fail(job,'Cloudflare konnte nicht verbunden werden. Bitte Berechtigungen prüfen und erneut anmelden.');}
+  }
+  if(body.csrf!==job.csrf)return json({error:'Ungültige Sitzung.'},403);
+  if(path==='/forget'){
+   if(job.stage==='uploading')return json({error:'Die Bereitstellung läuft noch.'},409);
+   await this.state.storage.deleteAll();await this.state.storage.deleteAlarm();return json({forgotten:true});
+  }
+  if(path==='/login'){
+   if(!this.env.OAUTH_CLIENT_ID)return json({error:'Die direkte Cloudflare-Anmeldung wird noch freigeschaltet.'},503);
+   if(!['idle','failed','authorizing'].includes(job.stage))return json({error:'Bitte die aktuelle Einrichtung abschließen.'},409);
+   const limiter=await this.env.LIMITS.get(this.env.LIMITS.idFromName('limits')).fetch('https://internal/',{method:'POST',body:JSON.stringify({key:body.rateKey})});if(!limiter.ok)return limiter;
+   const login=beginLogin(this.env.OAUTH_CLIENT_ID,body.redirectUri);login.expiresAt=Date.now()+600000;
+   await this.state.storage.put('login',login);job.stage='authorizing';await this.save(job);return json({url:login.url});
+  }
+  if(path==='/start'){
+   if(job.stage==='uploading'||job.stage==='ready')return this.status(job);
+   if(job.stage!=='authorized'||!job.accounts.some(a=>a.id===body.accountId))return json({error:'Bitte ein verbundenes Cloudflare-Konto auswählen.'},403);
+   job.accountId=body.accountId;job.scriptName='pac-'+crypto.randomUUID().replaceAll('-','').slice(0,12);job.stage='uploading';
+   await this.save(job,Date.now()+100);return this.status(job);
+  }
+  return json({},404);
+ });}
+ async save(job,alarm=job.expiresAt){await this.state.storage.put('job',job);await this.state.storage.setAlarm(alarm);}
+ status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error}:{})});}
+ async fail(job,error){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,expiresAt:Date.now()+600000});return json({ok:false});}
+ async alarm(){
+  const job=await this.state.storage.get('job');if(!job)return;
+  if(!job.version||job.expiresAt<=Date.now()){await this.state.storage.deleteAll();return;}
+  if(job.stage!=='uploading'){await this.state.storage.setAlarm(job.expiresAt);return;}
+  try{
+   const secret=await this.state.storage.get('secret');if(!secret||secret.expiresAt<=Date.now())throw new Error('expired');
+   job.previewUrl=await (this.env.deployPac||deployPac)({...secret,accountId:job.accountId,scriptName:job.scriptName},this.env.PAC_PAYLOAD);
+   job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
+   job.stage='ready';delete job.accounts;await this.state.storage.delete('secret');await this.save(job);
+  }catch{await this.fail(job,'Die Bereitstellung wurde unterbrochen. Prüfe dein Cloudflare-Konto auf einen Worker mit dem Namen '+job.scriptName+'. Bitte neu anmelden, bevor du erneut bereitstellst.');}
  }
 }
