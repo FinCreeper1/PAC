@@ -1,0 +1,1 @@
+{"name":"pac-installer","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs && wrangler deploy --dry-run","deploy":"node scripts/build.mjs && wrangler deploy","dev":"node scripts/build.mjs && wrangler dev","test":"node --test tests/*.test.mjs"},"devDependencies":{"esbuild":"0.28.2","wrangler":"4.151.0"}}

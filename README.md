@@ -1,5 +1,9 @@
 # PAC · Cloudflare Worker mit Wolke-Speicher
 
+**[PAC einrichten – ohne GitHub-Verknüpfung](https://pac-install.linusleupold.workers.dev)**
+
+Dieser dauerhafte Link erstellt für jeden Nutzer eine eigene Instanz mit einem persönlichen Cloudflare-Übernahme-Link.
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FFinCreeper1%2FPAC)
 
 
