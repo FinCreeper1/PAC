@@ -264,7 +264,7 @@ export default {
   async fetch(request,env) {
     const response=await env.PORTAL.get(env.PORTAL.idFromName('portal-v1')).fetch(request);
     const result=new Response(request.method==='HEAD'?null:response.body,response);
-    result.headers.set('x-content-type-options','nosniff');result.headers.set('x-frame-options','DENY');result.headers.set('referrer-policy','no-referrer');
+    result.headers.set('x-content-type-options','nosniff');result.headers.set('x-frame-options','DENY');result.headers.set('referrer-policy','same-origin');
     return result;
   }
 };
