@@ -49,7 +49,7 @@ async function sha256(value) {
 }
 export class NextcloudStorage {
   constructor(env,fetcher=fetch) {
-    this.env=env;this.fetcher=fetcher;
+    this.env=env;this.fetcher=(...args)=>fetcher(...args);
     const url=new URL(env.NEXTCLOUD_WEBDAV_URL);
     if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||!env.NEXTCLOUD_USERNAME||!env.NEXTCLOUD_APP_PASSWORD||!/^[\p{L}\p{N}._ -]{1,128}$/u.test(env.NEXTCLOUD_ROOT)||['.','..'].includes(env.NEXTCLOUD_ROOT)) throw new Error('Nextcloud-Konfiguration ist ungültig.');
     this.base=url.href.replace(/\/$/,'');
@@ -104,12 +104,15 @@ export class NextcloudStorage {
     if(!metadata||typeof metadata.name!=='string'||typeof metadata.type!=='string'||!Number.isSafeInteger(metadata.size)||metadata.size<0||typeof metadata.uploadedAt!=='string') throw storageError();
     return metadata;
   }
-  async putFile(key,body,metadata) {
+  async putFile(key,body,metadata,expectedSize=metadata.size) {
     const [folder,id]=this.file(key);
     await this.ensureBase();await this.ensure(['files',folder]);await this.ensure(['metadata',folder]);
     let size=0;
     const input=body instanceof ReadableStream?body:new Blob([body]).stream();
-    const stream=input.pipeThrough(new TransformStream({transform(chunk,controller){size+=chunk.byteLength;controller.enqueue(chunk);}}));
+    let stream=input.pipeThrough(new TransformStream({transform(chunk,controller){size+=chunk.byteLength;controller.enqueue(chunk);}}));
+    // Workers drops Content-Length on ordinary transformed streams. Preserve it
+    // explicitly: some WebDAV servers accept chunked PUTs but store empty files.
+    if(typeof FixedLengthStream==='function'&&Number.isSafeInteger(expectedSize)&&expectedSize>=0)stream=stream.pipeThrough(new FixedLengthStream(expectedSize));
     const uploaded=await this.success(await this.request('PUT',['files',folder,id],stream,{'content-type':'application/octet-stream','if-none-match':'*'}));
     await uploaded.body?.cancel();
     try {

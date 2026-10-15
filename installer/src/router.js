@@ -32,14 +32,14 @@ export async function route(request,env) {
    session=Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,'0')).join('');fresh=true;
    response=await env.JOBS.get(env.JOBS.idFromName('session:'+session)).fetch(new Request('https://internal/session'));
   }
-  if(path==='/oauth/callback')return new Response(null,{status:303,headers:{...headers,location:'/'}});
+  if(path==='/oauth/callback')return new Response(null,{status:303,headers:{...headers,location:response.ok?'/':'/?login=invalid'}});
   const result=new Response(response.body,response);for(const [key,value]of Object.entries(headers))result.headers.set(key,value);
   if(fresh||(path==='/api/start'&&response.ok))result.headers.set('set-cookie',`${cookieName}=${session}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=3600`);
   if(path==='/api/forget'&&response.ok)result.headers.set('set-cookie',`${cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);
   return result;
  }
  if(!['GET','HEAD'].includes(method))return reply({error:'Methode nicht erlaubt.'},405);
- if(!['/','/index.html','/style.css','/app.js'].includes(path))return reply({error:'Nicht gefunden.'},404);
+ if(!['/','/index.html','/style.css','/app.js','/logo.png','/logo.svg','/setup','/setup.html'].includes(path))return reply({error:'Nicht gefunden.'},404);
  const asset=await env.ASSETS.fetch(request),response=new Response(method==='HEAD'?null:asset.body,asset);
  for(const [key,value]of Object.entries(headers))response.headers.set(key,value);return response;
 }

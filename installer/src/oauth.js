@@ -1,5 +1,5 @@
 import {createHash,randomBytes} from 'node:crypto';
-export const scopes='account-settings.read workers-scripts.write';
+export const scopes='account-settings.read workers-scripts.edit';
 export function beginLogin(clientId,redirectUri){
  const state=randomBytes(32).toString('base64url'),verifier=randomBytes(32).toString('base64url');
  const url=new URL('https://dash.cloudflare.com/oauth2/auth');

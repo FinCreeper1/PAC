@@ -8,5 +8,6 @@
  "durable_objects":{"bindings":[{"name":"JOBS","class_name":"InstallJob"},{"name":"LIMITS","class_name":"InstallLimits"}]},
  "migrations":[{"tag":"v1","new_sqlite_classes":["InstallJob","InstallLimits"]}],
  "rules":[{"type":"Text","globs":["**/generated/*.txt"],"fallthrough":true}],
+ "vars":{"OAUTH_CLIENT_ID":"eb65174a9250c1559060e73acc38507f"},
  "observability":{"enabled":false}
 }

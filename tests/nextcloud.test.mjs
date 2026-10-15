@@ -52,3 +52,15 @@ test('configuration and keys cannot escape the configured cloud root',async()=>{
  for(const key of ['../secret','note:../secret','route:anything']) await assert.rejects(()=>cloud.readText(key));
  await assert.rejects(()=>cloud.getWithMetadata('../'+id,'stream'));await assert.rejects(()=>cloud.list({prefix:'../'}));
 });
+
+test('fetch is invoked without binding the storage adapter as its receiver',async()=>{
+ const {env}=mockWebdav();let receiver;
+ const cloud=new NextcloudStorage(env,function(){receiver=this;return Promise.resolve(new Response(null,{status:404}));});
+ assert.equal((await cloud.readText('ideas:board')).value,null);assert.equal(receiver,undefined);
+});
+test('known upload size uses the Workers fixed-length stream to avoid empty WebDAV files',async()=>{
+ const prior=globalThis.FixedLengthStream;let length;
+ globalThis.FixedLengthStream=class{constructor(size){length=size;return new TransformStream();}};
+ try{const {cloud}=mockWebdav();await cloud.putFile(key,'test bytes',{name:'test.txt',type:'text/plain',uploadedAt:'2030-01-01',size:10});assert.equal(length,10);assert.equal(new TextDecoder().decode((await cloud.getWithMetadata(key,'arrayBuffer')).value),'test bytes');}
+ finally{if(prior===undefined)delete globalThis.FixedLengthStream;else globalThis.FixedLengthStream=prior;}
+});

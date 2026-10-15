@@ -133,4 +133,8 @@ npx wrangler dev --port 8791 --var PORTAL_PASSWORD:local-test --var ADMIN_PASSWO
 CONFIRM_ISOLATED_TEST_STORAGE=1 node scripts/check-local-http.mjs
 ```
 
-Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine Testdatei an, die anschließend gelöscht wird. Sie wurde für die Nextcloud-Variante nicht gegen einen echten Wolke-Ordner ausgeführt.
+Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine Testdatei an, die anschließend gelöscht wird. Am 15.10.2026 wurde der Ablauf in der echten Worker-Runtime gegen einen eigenen Wolke-Testordner geprüft, einschließlich Anmeldung, Kalender, Notizen, Dateioperationen und Kalenderabo. Der Testordner wurde anschließend gelöscht und sein Fehlen geprüft.
+
+## Bestehende Instanz aktualisieren
+
+Für den vorbereiteten manuellen Update-Weg mit Erhalt der Worker-Variablen siehe [UPDATING.md](UPDATING.md). Der Installer erstellt weiterhin neue Instanzen.
