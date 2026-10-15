@@ -13,6 +13,7 @@ import trip from '../public/data/trip.json' with {type:'json'};
 import aliases from '../public/data/materials.json' with {type:'json'};
 import journeys from '../public/data/journeys.json' with {type:'json'};
 import { validateCalendar } from './validation.js';
+class PortalFailure extends Error {constructor(stage,cause){super('Portal operation failed');this.stage=stage;if(Number.isInteger(cause?.status))this.status=cause.status;this.reason=cause?.name==='TimeoutError'?'timeout':cause?.reason==='etag'?'etag':'response';}}
 const json = (data, status=200) => Response.json(data,{status,headers:{'cache-control':'private, no-store'}});
 const cookie = (name,value,age) => `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
 const redirect = (location, session) => new Response(null,{status:303,headers:{location,'set-cookie':session,'cache-control':'no-store'}});
@@ -34,7 +35,8 @@ export class Portal {
     return result.catch(error=>{
       if(error instanceof StorageConflict) return json({error:error.message},409);
       console.error('portal_request_failed',error.message);
-      return json({error:'Dateispeicher derzeit nicht erreichbar.',code:'storage_unavailable'},502);
+      const diagnostic={stage:error instanceof PortalFailure?error.stage:'request',...(Number.isInteger(error.status)?{upstreamStatus:error.status}:{}),...(error instanceof PortalFailure?{reason:error.reason}:{})};
+      return json({error:'Die Reise konnte nicht geladen werden.',code:'storage_unavailable',diagnostic},502);
     });
   }
   configured(){return missingSettings(this.env,Boolean(this.cloud)).length===0;}
@@ -46,10 +48,10 @@ export class Portal {
   }
   async snapshot() {
     if(!this.currentSnapshot) {
-      const record=await this.cloud.readText('calendar:snapshot');
-      const value=record.value===null ? {calendar:CalendarModel.normalize(seed,trip),trip,journeys,materials:aliases,routes:{}} : JSON.parse(record.value);
-      if(!value || !value.calendar || !value.routes || !value.trip || !value.journeys || !value.materials) throw new Error('Kalendersicherung in der Wolke ist ungültig.');
-      value.calendar=CalendarModel.normalize(value.calendar,value.trip);
+      let record;try{record=await this.cloud.readText('calendar:snapshot');}catch(error){throw new PortalFailure('calendar-read',error);}
+      let value;try{value=record.value===null ? {calendar:CalendarModel.normalize(seed,trip),trip,journeys,materials:aliases,routes:{}} : JSON.parse(record.value);}catch{throw new PortalFailure('calendar-parse');}
+      if(!value || !value.calendar || !value.routes || !value.trip || !value.journeys || !value.materials) throw new PortalFailure('calendar-shape');
+      try{value.calendar=CalendarModel.normalize(value.calendar,value.trip);}catch{throw new PortalFailure('calendar-normalize');}
       this.currentSnapshot={value,etag:record.etag};
     }
     return this.currentSnapshot;
