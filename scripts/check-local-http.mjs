@@ -10,7 +10,10 @@ r=await fetch(base+'/api/admin/calendar',{method:'PUT',headers:{cookie:admin,'co
 r=await fetch(base+'/api/materials?project='+event,{method:'PUT',headers:{cookie,'x-portal-password':btoa('local-test'),'x-delete-password':btoa('owner'),'x-file-name':btoa('integration.txt')},body:'Runtime upload'});assert.equal(r.status,201,await r.clone().text());const {file}=await r.json();
 r=await fetch(base+`/api/files/${event}/${file.id}`,{headers:{cookie}});assert.equal(await r.text(),'Runtime upload');
 const manifest=await (await fetch(base+'/api/offline-manifest',{headers:{cookie}})).json();assert.ok(manifest.files.some(f=>f.id===file.id));
+const note=await (await fetch(base+'/api/shared-note?event='+event,{headers:{cookie}})).json();
+r=await fetch(base+'/api/shared-note',{method:'PUT',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({event,text:'Wolke integration note',baseText:note.text||'',baseRevision:note.revision||0})});assert.equal(r.status,200,await r.clone().text());
+assert.equal((await (await fetch(base+'/api/shared-note?event='+event,{headers:{cookie}})).json()).text,'Wolke integration note');
 const subscription=await (await fetch(base+'/api/calendar-subscription',{headers:{cookie}})).json();
 r=await fetch(base+subscription.path);assert.equal(r.status,200);assert.match(await r.text(),/ATTACH/);
 r=await fetch(base+'/api/materials',{method:'DELETE',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({project:event,id:file.id,password:'owner'})});assert.equal(r.status,200);
-console.log('Real runtime HTTP checks passed: portal/admin login, calendar publication, Nextcloud upload/download/delete, offline manifest, signed calendar feed.');
+console.log('Real runtime HTTP checks passed: portal/admin login, calendar publication, shared notes, Nextcloud upload/download/delete, offline manifest, signed calendar feed.');

@@ -181,8 +181,10 @@ export class Portal {
         if(!safeEqual(decodeHeader(request,'x-portal-password'),this.env.PORTAL_PASSWORD)) return json({error:'Das Passwort ist nicht richtig.'},401);
         const password=decodeHeader(request,'x-delete-password'),name=decodeHeader(request,'x-file-name');
         if(!password||password.length>128||!name||!request.body) return json({error:'Dateiname und Löschpasswort erforderlich.'},400);
+        const rawSize=request.headers.get('content-length'),expectedSize=rawSize!==null&&/^\d+$/.test(rawSize)?Number(rawSize):undefined;
+        if(typeof FixedLengthStream==='function'&&!Number.isSafeInteger(expectedSize))return json({error:'Die Dateigröße fehlt. Bitte die Datei erneut als vollständige Datei hochladen.'},411);
         const id=crypto.randomUUID(),metadata={name:materials.safeFilename(name),type:'application/octet-stream',uploadedAt:new Date().toISOString(),...await materials.createDeletePasswordData(password)};
-        const object=await this.cloud.putFile(`${storageKey}/${id}`,request.body,metadata);
+        const object=await this.cloud.putFile(`${storageKey}/${id}`,request.body,metadata,expectedSize);
         return json({file:{id,name:metadata.name,type:metadata.type,size:object.size,uploadedAt:metadata.uploadedAt}},201);
       }
       const handler=materials[{GET:'onRequestGet',POST:'onRequestPost',DELETE:'onRequestDelete'}[method]];
