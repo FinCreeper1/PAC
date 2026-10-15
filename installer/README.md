@@ -13,7 +13,7 @@ Der Installer verwendet die direkte Cloudflare-Anmeldung (Authorization Code mit
    - Grant: `authorization_code`, Response: `code`
    - Token authentication: `none` (PKCE S256, kein Client-Secret)
    - Redirect: `https://pac-install.linusleupold.workers.dev/oauth/callback`
-   - Required scopes: `account-settings.read` und `workers-scripts.edit` (Workers → Edit)
+   - Required scopes: `account-settings.read` und `workers-scripts.admin` (Workers → Admin)
 2. Für die Veröffentlichung an andere Konten Client-URL auf einer eigenen verifizierbaren Domain, Logo und Scopes hinterlegen. Den von Cloudflare vorgegebenen DNS-TXT-Eintrag für die Domain setzen und den Client nach erfolgreicher Prüfung öffentlich schalten. Private Clients funktionieren nur für Mitglieder des Betreiberkontos.
 3. Die erhaltene öffentliche Client-ID unter `vars.OAUTH_CLIENT_ID` in `wrangler.jsonc` setzen. Die PAC-Client-ID ist bereits eingetragen. Kein Client-Secret, Zugriffstoken oder Betreiber-API-Token wird als Runtime-Secret benötigt.
 4. Mit einem eigenen Cloudflare-Testkonto den echten Anmelde-, Auswahl- und Deployment-Ablauf prüfen, bevor die Freischaltung als abgeschlossen gilt.
@@ -59,3 +59,7 @@ Diese Prüfungen sind nicht visuell und ersetzen keinen echten OAuth-Durchlauf m
 Die Erfolgsseite verlinkt `/setup.html` mit WebDAV-Beispiel, App-Passwort, Ordnerregeln und der Anleitung für Secrets. Neu erstellte PAC-Instanzen zeigen bei fehlenden Angaben eine Einrichtungsseite; API-Anfragen erhalten weiterhin JSON mit `configuration_missing` oder `configuration_invalid`. Es werden nur Variablennamen, keine gesetzten Werte angezeigt.
 
 Abgelehnte Anmeldung, fehlende Konten oder Rechte und abgelaufene Sitzungen führen zu einer erklärten Fehlermeldung mit Neustartmöglichkeit. Nach einem unklaren Upload bleibt ein Link zum gewählten Worker erhalten, damit Nutzer vor einer neuen Installation auf bereits angelegte Ressourcen prüfen können. Zugangstokens werden auch dabei gelöscht.
+
+## Berechtigung zum Anlegen neuer Worker
+
+Der Installer benötigt Workers Admin, da Workers Editor laut Cloudflare nur vorhandene Ressourcen ändern darf. Account Settings Read bleibt für die Kontoauswahl erforderlich. Wird ein bestehender OAuth-Client von Edit auf Admin geändert, müssen Nutzer neu zustimmen; bereits ausgestellte Tokens erhalten dadurch keine zusätzlichen Rechte. Die Admin-Berechtigung bezieht sich auf Workers im freigegebenen Konto und erlaubt auch deren Löschen. PAC verwendet sie zum Erstellen einer neuen Instanz und löscht das gespeicherte Token danach. Quelle: https://developers.cloudflare.com/workers/authorization/
