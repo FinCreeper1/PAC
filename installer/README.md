@@ -13,9 +13,9 @@ Der Installer verwendet die direkte Cloudflare-Anmeldung (Authorization Code mit
    - Grant: `authorization_code`, Response: `code`
    - Token authentication: `none` (PKCE S256, kein Client-Secret)
    - Redirect: `https://pac-install.linusleupold.workers.dev/oauth/callback`
-   - Required scopes: `account-settings.read` und `workers-scripts.write`
+   - Required scopes: `account-settings.read` und `workers-scripts.edit` (Workers → Edit)
 2. Für die Veröffentlichung an andere Konten Client-URL auf einer eigenen verifizierbaren Domain, Logo und Scopes hinterlegen. Den von Cloudflare vorgegebenen DNS-TXT-Eintrag für die Domain setzen und den Client nach erfolgreicher Prüfung öffentlich schalten. Private Clients funktionieren nur für Mitglieder des Betreiberkontos.
-3. Die erhaltene Client-ID als Worker-Secret setzen: `npx wrangler secret put OAUTH_CLIENT_ID`. Kein Zugriffstoken und kein Betreiber-API-Token werden als Runtime-Secret benötigt.
+3. Die erhaltene öffentliche Client-ID unter `vars.OAUTH_CLIENT_ID` in `wrangler.jsonc` setzen. Die PAC-Client-ID ist bereits eingetragen. Kein Client-Secret, Zugriffstoken oder Betreiber-API-Token wird als Runtime-Secret benötigt.
 4. Mit einem eigenen Cloudflare-Testkonto den echten Anmelde-, Auswahl- und Deployment-Ablauf prüfen, bevor die Freischaltung als abgeschlossen gilt.
 
 Cloudflare-Dokumentation: [Client registrieren](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/), [OAuth-Endpunkte](https://developers.cloudflare.com/fundamentals/oauth/integrate-with-cloudflare/).
