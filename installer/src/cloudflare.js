@@ -18,6 +18,7 @@ export async function api(path,{method='GET',token,body,form,fetcher=fetch,stage
 }
 export async function deployPac(secret,payload,fetcher=fetch) {
  const prefix='/accounts/'+secret.accountId+'/workers',token=secret.apiToken,name=secret.scriptName;
+ if(!/^[a-f0-9]{64}$/.test(secret.setupToken||''))throw new ApiError(400,'setup-token');
  if(!/^[a-f0-9]{32}$/.test(secret.accountId)||!/^pac-[a-f0-9]{12}$/.test(name||''))throw new ApiError(400,'deployment-target');
  let subdomain;
  try{subdomain=(await api(prefix+'/subdomain',{token,fetcher,stage:'subdomain'}))?.subdomain;}catch(error){if(error.status!==404)throw error;}
@@ -28,7 +29,7 @@ export async function deployPac(secret,payload,fetcher=fetch) {
  if(!/^[a-z0-9-]+$/.test(subdomain))throw new ApiError(502,'subdomain-response');
  // A pre-existing script is never overwritten, including after an ambiguous upload.
  try{await api(prefix+'/scripts/'+name+'/settings',{token,fetcher,stage:'settings'});throw new ApiError(409,'already-exists');}catch(error){if(error.status!==404)throw error;}
- const metadata={main_module:'worker.mjs',compatibility_date:'2026-09-10',bindings:[{type:'durable_object_namespace',name:'PORTAL',class_name:'Portal'}],migrations:{new_tag:'v1',steps:[{new_sqlite_classes:['Portal']}]}};
+ const metadata={main_module:'worker.mjs',compatibility_date:'2026-09-10',bindings:[{type:'durable_object_namespace',name:'PORTAL',class_name:'Portal'},{type:'secret_text',name:'PAC_SETUP_SECRET',text:secret.setupToken}],migrations:{new_tag:'v1',steps:[{new_sqlite_classes:['Portal']}]}};
  const form=new FormData();form.set('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.set('worker.mjs',new File([payload],'worker.mjs',{type:'application/javascript+module'}));
  await api(prefix+'/scripts/'+name,{method:'PUT',token,form,fetcher,stage:'upload'});
  await api(prefix+'/scripts/'+name+'/subdomain',{method:'POST',token,body:{enabled:true,previews_enabled:false},fetcher,stage:'enable-subdomain'});

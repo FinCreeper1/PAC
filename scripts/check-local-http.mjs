@@ -1,13 +1,13 @@
 if(process.env.CONFIRM_ISOLATED_TEST_STORAGE!=='1') throw new Error('Diese schreibende Prüfung benötigt einen separaten Wolke-Testordner und CONFIRM_ISOLATED_TEST_STORAGE=1.');
 import assert from 'node:assert/strict';
-const base='http://127.0.0.1:8791';
+const base=process.env.PAC_TEST_BASE||'http://127.0.0.1:8791',portalPassword=process.env.PAC_TEST_PASSWORD||'local-test',adminPassword=process.env.PAC_TEST_ADMIN_PASSWORD||'local-admin';
 const login=async(path,password)=>{const r=await fetch(base+path,{method:'POST',body:new URLSearchParams({password}),redirect:'manual'});assert.equal(r.status,303);return r.headers.get('set-cookie').split(';')[0];};
-const cookie=await login('/__login','local-test');
+const cookie=await login('/__login',portalPassword);
 const calendar=await (await fetch(base+'/data/calendar.json',{headers:{cookie}})).json(),event=calendar.events[0].id;
-const admin=await login('/admin/login','local-admin');
+const admin=await login('/admin/login',adminPassword);
 let r=await fetch(base+'/api/admin/calendar',{headers:{cookie:admin}});assert.equal(r.status,200);const state=await r.json();
 r=await fetch(base+'/api/admin/calendar',{method:'PUT',headers:{cookie:admin,'content-type':'application/json','x-csrf-token':state.csrf},body:JSON.stringify(state)});assert.equal(r.status,200,await r.clone().text());
-r=await fetch(base+'/api/materials?project='+event,{method:'PUT',headers:{cookie,'x-portal-password':btoa('local-test'),'x-delete-password':btoa('owner'),'x-file-name':btoa('integration.txt')},body:'Runtime upload'});assert.equal(r.status,201,await r.clone().text());const {file}=await r.json();
+r=await fetch(base+'/api/materials?project='+event,{method:'PUT',headers:{cookie,'x-portal-password':btoa(portalPassword),'x-delete-password':btoa('owner'),'x-file-name':btoa('integration.txt')},body:'Runtime upload'});assert.equal(r.status,201,await r.clone().text());const {file}=await r.json();
 r=await fetch(base+`/api/files/${event}/${file.id}`,{headers:{cookie}});assert.equal(await r.text(),'Runtime upload');
 const manifest=await (await fetch(base+'/api/offline-manifest',{headers:{cookie}})).json();assert.ok(manifest.files.some(f=>f.id===file.id));
 const note=await (await fetch(base+'/api/shared-note?event='+event,{headers:{cookie}})).json();

@@ -69,6 +69,7 @@ export class InstallJob {
   if(path==='/start'){
    if(job.stage==='uploading'||job.stage==='ready')return this.status(job);
    if(job.stage!=='authorized'||!job.accounts.some(a=>a.id===body.accountId))return json({error:'Bitte ein verbundenes Cloudflare-Konto auswählen.'},403);
+   job.setupToken=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
    job.accountId=body.accountId;job.scriptName='pac-'+crypto.randomUUID().replaceAll('-','').slice(0,12);job.stage='uploading';
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    await this.save(job,Date.now()+100);return this.status(job);
@@ -76,7 +77,7 @@ export class InstallJob {
   return json({},404);
  });}
  async save(job,alarm=job.expiresAt){await this.state.storage.put('job',job);await this.state.storage.setAlarm(alarm);}
- status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.diagnostic?{diagnostic:job.diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
+ status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,...(job.setupToken?{setupUrl:job.previewUrl+'/setup#token='+job.setupToken}:{}),dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.diagnostic?{diagnostic:job.diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
  async fail(job,error,diagnostic){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,...(diagnostic?{diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),expiresAt:Date.now()+600000});return json({ok:false});}
  async alarm(){
   const job=await this.state.storage.get('job');if(!job)return;
@@ -84,7 +85,7 @@ export class InstallJob {
   if(job.stage!=='uploading'){await this.state.storage.setAlarm(job.expiresAt);return;}
   try{
    const secret=await this.state.storage.get('secret');if(!secret||secret.expiresAt<=Date.now())throw new Error('expired');
-   job.previewUrl=await (this.env.deployPac||deployPac)({...secret,accountId:job.accountId,scriptName:job.scriptName},this.env.PAC_PAYLOAD);
+   job.previewUrl=await (this.env.deployPac||deployPac)({...secret,accountId:job.accountId,scriptName:job.scriptName,setupToken:job.setupToken},this.env.PAC_PAYLOAD);
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    job.stage='ready';delete job.accounts;await this.state.storage.delete('secret');await this.save(job);
   }catch(error){

@@ -1,3 +1,4 @@
+import {openConfiguration,finishSetup,onboardingResponse} from './onboarding.js';
 import {missingSettings,setupResponse} from './setup.js';
 import { onRequest as authenticate, sign, safeEqual } from './legacy/_middleware.js';
 import * as materials from './legacy/api/materials.js';
@@ -24,17 +25,24 @@ function decodeHeader(request,name) {
 
 // One object serializes writes; application data stays exclusively in Nextcloud.
 export class Portal {
-  constructor(state,env) {this.state=state;this.env=env;this.queue=Promise.resolve();this.cloud=env.cloudStorage || null;}
+  constructor(state,env) {this.state=state;this.baseEnv=env;this.env=env;this.queue=Promise.resolve();this.cloud=env.cloudStorage || null;}
   async fetch(request) {
     // A promise queue serializes requests without closing the input gate:
     // closing that gate while streaming an upload can prevent its body arriving.
-    const result=this.queue.then(()=>{this.currentSnapshot=undefined;return this.handle(request);});
+    const result=this.queue.then(()=>{this.currentSnapshot=undefined;return this.loadConfiguration().then(()=>this.handle(request));});
     this.queue=result.catch(()=>{});
     return result.catch(error=>{
       if(error instanceof StorageConflict) return json({error:error.message},409);
       console.error('portal_request_failed',error.message);
       return json({error:'Dateispeicher derzeit nicht erreichbar.',code:'storage_unavailable'},502);
     });
+  }
+  configured(){return missingSettings(this.env,Boolean(this.cloud)).length===0;}
+  async loadConfiguration(){
+    if(this.configurationLoaded)return;
+    const record=await this.state.storage.get('configuration:v1');
+    if(record){const config=await openConfiguration(record,this.baseEnv.PAC_SETUP_SECRET);this.env={...config,...this.baseEnv};}
+    this.configurationLoaded=true;
   }
   async snapshot() {
     if(!this.currentSnapshot) {
@@ -68,8 +76,17 @@ export class Portal {
   }
   async handle(request) {
     const env=this.env, url=new URL(request.url), path=url.pathname, method=request.method;
+    if(path==='/api/setup')return finishSetup(request,this);
+    if(path==='/setup'||path==='/setup.js'){
+      if(!['GET','HEAD'].includes(method))return json({error:'Methode nicht erlaubt.'},405);
+      if(this.configured())return new Response(null,{status:303,headers:{location:'/', 'cache-control':'no-store'}});
+      if(typeof this.baseEnv.PAC_SETUP_SECRET==='string'&&this.baseEnv.PAC_SETUP_SECRET.length>=32)return onboardingResponse(request);
+    }
     const missing=missingSettings(env,Boolean(this.cloud));
-    if(missing.length)return setupResponse(request,missing);
+    if(missing.length){
+      if(this.baseEnv.PAC_SETUP_SECRET?.length>=32&&!path.startsWith('/api/'))return new Response(null,{status:303,headers:{location:'/setup','cache-control':'no-store'}});
+      return setupResponse(request,missing);
+    }
     try{this.cloud ||= new NextcloudStorage(env);}catch{return setupResponse(request,[],true);}
     if(!['GET','HEAD','OPTIONS'].includes(method) && request.headers.get('origin') && request.headers.get('origin')!==url.origin) return json({error:'Fremder Ursprung.'},403);
     const session=await this.adminSession(request);

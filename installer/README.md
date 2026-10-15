@@ -63,3 +63,7 @@ Abgelehnte Anmeldung, fehlende Konten oder Rechte und abgelaufene Sitzungen füh
 ## Berechtigung zum Anlegen neuer Worker
 
 Der Installer benötigt Workers Admin, da Workers Editor laut Cloudflare nur vorhandene Ressourcen ändern darf. Account Settings Read bleibt für die Kontoauswahl erforderlich. Wird ein bestehender OAuth-Client von Edit auf Admin geändert, müssen Nutzer neu zustimmen; bereits ausgestellte Tokens erhalten dadurch keine zusätzlichen Rechte. Die Admin-Berechtigung bezieht sich auf Workers im freigegebenen Konto und erlaubt auch deren Löschen. PAC verwendet sie zum Erstellen einer neuen Instanz und löscht das gespeicherte Token danach. Quelle: https://developers.cloudflare.com/workers/authorization/
+
+## Persönliche App-Ersteinrichtung
+
+Jede neue Bereitstellung enthält ein zufälliges Worker-Secret PAC_SETUP_SECRET mit 256 Bit. Die private Installer-Erfolgsseite liefert den persönlichen Link /setup#token=… zur neuen Instanz. Wolke-Passwörter werden erst dort eingegeben und nicht an den Installer gesendet. Der Token verbleibt in der zugehörigen Installer-Sitzung bis zu deren Ablauf, um den Link erneut öffnen zu können. Das eigene PAC speichert die Konfiguration verschlüsselt, prüft die Wolke und sperrt nach Abschluss weitere Ersteinrichtungen. Bereits eingerichtete Worker werden durch diese Änderung nicht umgestellt.

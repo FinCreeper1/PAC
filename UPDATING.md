@@ -54,3 +54,7 @@ Ein Code-Rollback stellt keine zwischenzeitlich geänderten Wolkendaten wieder h
 ## Prüfstand
 
 Bau und Konfiguration des Update-Befehls werden als Dry-Run geprüft. Ein echtes Update einer bestehenden Nutzerinstanz und ein echter Rollback sind noch nicht verifiziert; diese Anleitung beschreibt den vorbereiteten manuellen Weg.
+
+## Instanzen mit App-Einrichtung
+
+PAC_SETUP_SECRET muss erhalten bleiben: Es schützt die verschlüsselte Konfiguration im Durable Object. Lösche oder rotiere es nicht ohne vorherige Migration dieser Konfiguration. Das PORTAL-Binding und die bestehende Durable-Object-Klasse ebenfalls erhalten. Der persönliche Setup-Link ist nach erfolgreicher Einrichtung kein Weg zum Ändern der Einstellungen. Manuell im Cloudflare-Dashboard gesetzte Variablen und Secrets können Formularwerte überschreiben.
