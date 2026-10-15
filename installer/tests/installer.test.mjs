@@ -16,7 +16,7 @@ function fixture(){
 async function authorized(){const f=fixture();f.csrf=(await f.call('session')).data.csrf;await f.call('login',{csrf:f.csrf,redirectUri:'https://install.test/oauth/callback'});f.login=f.storage.data.get('login');await f.call('callback',{state:f.login.state,code:'code'});return f;}
 test('PKCE uses a fresh verifier and state, with fixed Cloudflare endpoint',()=>{
  const login=beginLogin('client','https://install.test/oauth/callback'),url=new URL(login.url);
- assert.equal(url.origin,'https://dash.cloudflare.com');assert.equal(url.searchParams.get('scope'),'account-settings.read workers-scripts.edit');assert.equal(url.searchParams.get('code_challenge'),createHash('sha256').update(login.verifier).digest('base64url'));assert.notEqual(beginLogin('client','https://install.test/oauth/callback').state,login.state);
+ assert.equal(url.origin,'https://dash.cloudflare.com');assert.equal(url.searchParams.get('scope'),'account-settings.read workers-scripts.admin');assert.equal(url.searchParams.get('code_challenge'),createHash('sha256').update(login.verifier).digest('base64url'));assert.notEqual(beginLogin('client','https://install.test/oauth/callback').state,login.state);
 });
 test('token exchange keeps verifier server-side and refuses invalid token responses',async()=>{
  const login=beginLogin('client','https://install.test/oauth/callback');
@@ -67,7 +67,7 @@ test('denied authorization and missing accounts produce recoverable failures wit
   if(mode==='forbidden')f.env.requestApi=async()=>{const e=new Error('private-response');e.status=403;throw e;};
   await f.call('callback',{state:f.storage.data.get('login').state,...(mode==='denied'?{error:'access_denied'}:{code:'code'})});
   const result=(await f.call('status')).data;assert.equal(result.stage,'failed');assert.ok(!JSON.stringify(result).includes('private-response'));assert.equal(f.storage.data.has('secret'),false);
-  assert.match(result.error,mode==='empty'?/kein zugängliches/:mode==='forbidden'?/Workers → Edit/:/nicht abgeschlossen/);
+  assert.match(result.error,mode==='empty'?/kein zugängliches/:mode==='forbidden'?/Workers → Admin/:/nicht abgeschlossen/);
   assert.equal((await f.call('forget',{csrf})).status,200);
  }
 });

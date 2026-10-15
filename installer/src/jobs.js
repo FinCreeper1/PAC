@@ -52,7 +52,7 @@ export class InstallJob {
     job.accounts=accounts.filter(a=>/^[a-f0-9]{32}$/.test(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name}));
     if(!job.accounts.length)throw new Error('no-accounts');
     await this.state.storage.put('secret',secret);job.stage='authorized';job.expiresAt=secret.expiresAt;await this.save(job);return json({ok:true});
-   }catch(error){return this.fail(job,error.message==='no-accounts'?'Es wurde kein zugängliches Cloudflare-Konto gefunden. Prüfe deine Kontomitgliedschaft und die freigegebenen Konten.':error.status===403?'Cloudflare hat den Kontozugriff abgelehnt. Erlaube Account Settings → Read und Workers → Edit und melde dich erneut an.':error.status===429?'Cloudflare begrenzt gerade die Anfragen. Warte kurz und melde dich erneut an.':'Die Cloudflare-Anmeldung konnte nicht abgeschlossen werden. Bitte erneut anmelden.');}
+   }catch(error){return this.fail(job,error.message==='no-accounts'?'Es wurde kein zugängliches Cloudflare-Konto gefunden. Prüfe deine Kontomitgliedschaft und die freigegebenen Konten.':error.status===403?'Cloudflare hat den Kontozugriff abgelehnt. Erlaube Account Settings → Read und Workers → Admin und melde dich erneut an.':error.status===429?'Cloudflare begrenzt gerade die Anfragen. Warte kurz und melde dich erneut an.':'Die Cloudflare-Anmeldung konnte nicht abgeschlossen werden. Bitte erneut anmelden.');}
   }
   if(body.csrf!==job.csrf)return json({error:'Ungültige Sitzung.'},403);
   if(path==='/forget'){
@@ -92,7 +92,7 @@ export class InstallJob {
    const stage=Object.hasOwn(labels,error.stage)?error.stage:'deployment';
    const diagnostic={stage,...(Number.isInteger(error.status)?{status:error.status}:{}),...(Number.isInteger(error.code)?{code:error.code}:{})};
    const detail='Schritt: '+(labels[stage]||'Bereitstellung')+(diagnostic.status?' · HTTP '+diagnostic.status:'')+(diagnostic.code?' · Cloudflare-Code '+diagnostic.code:'')+'. ';
-   const advice=error.status===403&&stage==='subdomain'?'Cloudflare verweigert das Lesen der Konto-Subdomain. Diese API verlangt laut Dokumentation Workers Scripts Read oder Write; Workers → Edit allein deckt den Aufruf nicht ab. ':error.status===403?'Cloudflare hat diesen API-Aufruf abgelehnt. Die erforderliche Berechtigung hängt vom angezeigten Schritt ab. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'';
+   const advice=error.status===403&&stage==='subdomain'?'Cloudflare verweigert das Lesen der Konto-Subdomain. Diese API verlangt laut Dokumentation Workers Scripts Read oder Write; Workers → Admin allein deckt den Aufruf nicht ab. ':error.status===403&&stage==='upload'?'Zum Anlegen eines neuen Workers ist Workers → Admin erforderlich. Workers → Edit erlaubt nur Änderungen an bestehenden Workern. Bitte den OAuth-Client anpassen und erneut anmelden. ':error.status===403?'Cloudflare hat diesen API-Aufruf abgelehnt. Die erforderliche Berechtigung hängt vom angezeigten Schritt ab. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'';
    await this.fail(job,detail+advice+'Bitte prüfe vor einem neuen Versuch den Worker '+job.scriptName+' in deinem Konto.',diagnostic);
   }
  }
