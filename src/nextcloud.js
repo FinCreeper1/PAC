@@ -3,7 +3,8 @@ const encoder=new TextEncoder();
 const filePattern=/^([a-z0-9-]{1,64})\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const textPattern=/^(?:(?:note|shared-note):[a-z0-9-]{1,64}|ideas:board|calendar:snapshot)$/;
 export class StorageConflict extends Error {}
-const storageError=()=>new Error('Dateispeicher derzeit nicht erreichbar.');
+export class StorageUnavailable extends Error {constructor(status,reason='response'){super('Dateispeicher derzeit nicht erreichbar.');if(Number.isInteger(status))this.status=status;this.reason=reason;}}
+const storageError=(status,reason)=>new StorageUnavailable(status,reason);
 const array=value=>value==null?[]:Array.isArray(value)?value:[value];
 const text=value=>typeof value==='string'?value:typeof value?.['#text']==='string'?value['#text']:'';
 function namespaces(node,parent={}) {
@@ -44,6 +45,23 @@ export function davBasenames(xml,collectionUrl) {
   }
   return [...new Set(names)];
 }
+const strongEtag=value=>typeof value==='string'&&value.length<=1024&&/^"[^"\r\n]*"$/.test(value);
+export function davEtag(xml,resourceUrl){
+ if(/<!DOCTYPE|<!ENTITY/i.test(xml)||XMLValidator.validate(xml)!==true)throw storageError(207,'etag');
+ const parsed=new XMLParser({ignoreAttributes:false,parseTagValue:false,trimValues:true}).parse(xml),roots=children(parsed,'multistatus',{}),expected=new URL(resourceUrl);
+ if(roots.length!==1)throw storageError(207,'etag');
+ const tags=[];
+ for(const row of children(roots[0].value,'response',roots[0].ns)){
+  const hrefs=children(row.value,'href',row.ns);if(hrefs.length!==1)continue;
+  const href=new URL(text(hrefs[0].value),expected);
+  if(href.origin!==expected.origin||href.search||href.hash||decodeURIComponent(href.pathname)!==decodeURIComponent(expected.pathname))continue;
+  for(const stat of children(row.value,'propstat',row.ns)){
+   const statuses=children(stat.value,'status',stat.ns);if(!statuses.some(s=>/^HTTP\/\S+\s+200\b/.test(text(s.value))))continue;
+   for(const prop of children(stat.value,'prop',stat.ns))for(const entry of children(prop.value,'getetag',prop.ns)){const tag=text(entry.value);if(strongEtag(tag))tags.push(tag);}
+  }
+ }
+ if(!tags.length||new Set(tags).size!==1)throw storageError(207,'etag');return tags[0];
+}
 async function sha256(value) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(value)))].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
@@ -73,7 +91,7 @@ export class NextcloudStorage {
     return response;
   }
   async success(response) {
-    if(!response.ok) {await response.body?.cancel();throw storageError();}
+    if(!response.ok) {await response.body?.cancel();throw storageError(response.status);}
     return response;
   }
   async ensure(parts) {
@@ -86,10 +104,18 @@ export class NextcloudStorage {
     const response=await this.request('GET',await this.textPath(key));
     if(response.status===404) {await response.body?.cancel();return {value:null,etag:null};}
     await this.success(response);
-    const etag=response.headers.get('etag');
-    // Conditional writes require a strong revision from Nextcloud.
-    if(!etag||etag.startsWith('W/')) {await response.body?.cancel();throw storageError();}
-    return {value:await response.text(),etag};
+    // Some WebDAV gateways strip or weaken the HTTP ETag header. Read the DAV
+    // property, then conditionally fetch the body so it cannot belong to an older
+    // revision than the ETag used for a later write.
+    let etag=response.headers.get('etag');
+    if(strongEtag(etag))return {value:await response.text(),etag};
+    await response.body?.cancel();
+    const parts=await this.textPath(key),properties=await this.request('PROPFIND',parts,'<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>',{depth:'0','content-type':'application/xml; charset=utf-8'});
+    if(properties.status!==207){await properties.body?.cancel();throw storageError(properties.status,'etag');}
+    etag=davEtag(await properties.text(),this.url(parts));
+    const current=await this.request('GET',parts,null,{'if-match':etag});
+    if(current.status===404){await current.body?.cancel();throw new StorageConflict('Die Wolkendaten wurden inzwischen geändert. Bitte neu laden.');}
+    await this.success(current);return {value:await current.text(),etag};
   }
   async writeText(key,value,etag) {
     await this.ensureBase();

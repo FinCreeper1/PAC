@@ -64,3 +64,16 @@ test('known upload size uses the Workers fixed-length stream to avoid empty WebD
  try{const {cloud}=mockWebdav();await cloud.putFile(key,'test bytes',{name:'test.txt',type:'text/plain',uploadedAt:'2030-01-01',size:10});assert.equal(length,10);assert.equal(new TextDecoder().decode((await cloud.getWithMetadata(key,'arrayBuffer')).value),'test bytes');}
  finally{if(prior===undefined)delete globalThis.FixedLengthStream;else globalThis.FixedLengthStream=prior;}
 });
+
+test('WebDAV property fallback recovers stripped ETags and conditionally refetches the matching body',async()=>{
+ const {env}=mockWebdav();let path;const calls=[];
+ const cloud=new NextcloudStorage(env,async(url,options)=>{path=new URL(url).pathname;calls.push(options);if(options.method==='PROPFIND')return new Response(`<d:multistatus xmlns:d="DAV:"><d:response><d:href>${path}</d:href><d:propstat><d:prop><d:getetag>&quot;dav-v1&quot;</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`,{status:207});return new Response(options.headers['if-match']?'latest body':'discarded body');});
+ const record=await cloud.readText('calendar:snapshot');assert.equal(record.value,'latest body');assert.equal(record.etag,'"dav-v1"');assert.equal(calls.length,3);assert.equal(calls[2].headers['if-match'],'"dav-v1"');
+});
+test('fallback refuses missing DAV versions and detects a race before the conditional read',async()=>{
+ const {env}=mockWebdav();
+ const cloud=new NextcloudStorage(env,async(url,options)=>{if(options.method==='PROPFIND')return new Response(`<d:multistatus xmlns:d="DAV:"><d:response><d:href>${new URL(url).pathname}</d:href><d:propstat><d:prop><d:getetag>&quot;old&quot;</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`,{status:207});return options.headers['if-match']?new Response(null,{status:412}):new Response('old body');});
+ await assert.rejects(()=>cloud.readText('calendar:snapshot'),StorageConflict);
+ const missing=new NextcloudStorage(env,async(url,options)=>options.method==='PROPFIND'?new Response('<d:multistatus xmlns:d="DAV:"/>',{status:207}):new Response('body'));
+ await assert.rejects(()=>missing.readText('calendar:snapshot'),e=>e.reason==='etag');
+});
