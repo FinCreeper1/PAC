@@ -148,3 +148,11 @@ test('invalid Nextcloud configuration returns actionable setup response',async()
  const portal=new Portal({storage:{get:async()=>null}},{PORTAL_PASSWORD:'x',ADMIN_PASSWORD:'y',SESSION_SECRET:'secret',NEXTCLOUD_WEBDAV_URL:'http://invalid.test',NEXTCLOUD_USERNAME:'user',NEXTCLOUD_APP_PASSWORD:'private',NEXTCLOUD_ROOT:'PAC'});
  const response=await portal.fetch(new Request('https://portal.test/api/materials'));assert.equal(response.status,503);const data=await response.json();assert.equal(data.code,'configuration_invalid');assert.ok(!JSON.stringify(data).includes('private'));
 });
+
+test('deployed admin form retains same-origin referrers while rejecting foreign and null origins',async()=>{
+ const {default:worker}=await import('../src/index.js');const fixture=setup();
+ const env={PORTAL:{idFromName:x=>x,get:()=>({fetch:req=>fixture.call(new URL(req.url).pathname,{method:req.method,headers:req.headers,body:req.method==='POST'?req.body:undefined,...(req.method==='POST'?{duplex:'half'}:{})})})}};
+ const page=await worker.fetch(new Request('https://portal.test/admin'),env);assert.equal(page.status,200);assert.equal(page.headers.get('referrer-policy'),'same-origin');assert.match(await page.text(),/action="\/admin\/login"/);
+ const submit=origin=>worker.fetch(new Request('https://portal.test/admin/login',{method:'POST',headers:{origin},body:new URLSearchParams({password:'admin-test'})}),env);
+ assert.equal((await submit('https://portal.test')).status,303);assert.equal((await submit('https://other.test')).status,403);assert.equal((await submit('null')).status,403);
+});
