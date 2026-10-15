@@ -11,31 +11,30 @@
     const parts = Object.fromEntries(formatter.formatToParts(now).map(part => [part.type, part.value]));
     return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
   }
+  const timer = value.closest(".submission-timer");
+  let loaded = false;
   let targets = [];
   function loadTargets() {
+    loaded = true;
     targets = portalCalendar.events.filter(item => item.timing === "scheduled")
       .map(item => {
         const date = portalCalendar.days[item.day - 1]?.isoDate;
         return { title: item.title, time: item.startTime,
           start: Date.parse(`${date}T${item.startTime}:00Z`) };
       }).filter(item => Number.isFinite(item.start));
-    // The trip starts with the 07:00 meeting, even if it is not a separate calendar entry.
-    const meeting = Date.parse(`${portalCalendar.days[0]?.isoDate}T07:00:00Z`);
-    if (Number.isFinite(meeting) && !targets.some(item => item.start === meeting)) {
-      targets.push({ title: "Treffpunkt", time: "07:00", start: meeting });
-    }
     targets.sort((a, b) => a.start - b.start);
     update();
   }
   let timeout;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const digits = Array.from("00:00:00", character => {
+  function createDigits(time) { return Array.from(time, character => {
     const digit = document.createElement("span");
     digit.className = character === ":" ? "submission-timer-separator" : "submission-timer-digit";
     digit.textContent = character;
     digit.setAttribute("aria-hidden", "true");
     return digit;
-  });
+  }); }
+  let digits = createDigits("00:00:00");
   value.replaceChildren(...digits);
   let previousTime;
   function update() {
@@ -43,8 +42,9 @@
     const now = new Date();
     const current = berlinTime(now);
     const next = targets.find(item => item.start > current);
+    if (timer) timer.hidden = loaded && !next;
     if (!next) {
-      label.textContent = targets.length ? "Alle Termine haben begonnen" : "Nächster Termin wird geladen …";
+      label.textContent = loaded ? "Keine kommenden Termine" : "Nächster Termin wird geladen …";
       value.hidden = true;
       timeout = setTimeout(update, 1000 - now.getMilliseconds());
       return;
@@ -57,6 +57,10 @@
     const seconds = Math.max(0, Math.round((next.start - current) / 1000));
     const time = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
       .map(number => String(number).padStart(2, "0")).join(":");
+    if (digits.length !== time.length) {
+      digits = createDigits(time);
+      value.replaceChildren(...digits);
+    }
     value.setAttribute("aria-label", time);
     digits.forEach((digit, index) => {
       if (digit.textContent === time[index]) return;
