@@ -39,7 +39,7 @@ export async function route(request,env) {
   return result;
  }
  if(!['GET','HEAD'].includes(method))return reply({error:'Methode nicht erlaubt.'},405);
- if(!['/','/index.html','/style.css','/app.js'].includes(path))return reply({error:'Nicht gefunden.'},404);
+ if(!['/','/index.html','/style.css','/app.js','/logo.png','/logo.svg'].includes(path))return reply({error:'Nicht gefunden.'},404);
  const asset=await env.ASSETS.fetch(request),response=new Response(method==='HEAD'?null:asset.body,asset);
  for(const [key,value]of Object.entries(headers))response.headers.set(key,value);return response;
 }
