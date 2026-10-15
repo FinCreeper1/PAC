@@ -502,3 +502,5 @@ footer { display: flex; justify-content: space-between; padding: 28px 0 50px; co
 
 .submission-timer-digit, .submission-timer-separator { display: inline-block; }
 .submission-timer-digit { width: 1ch; text-align: center; }
+
+.submission-timer-warning { background: #fff4df; color: #784500; border-color: #c08a35; }
