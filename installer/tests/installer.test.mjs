@@ -59,3 +59,24 @@ test('deployment uploads SQLite binding with unique name and no redirects',async
 });
 test('API does not disclose upstream errors or follow redirects',async()=>{await assert.rejects(()=>api('/test',{fetcher:async()=>new Response(null,{status:302,headers:{location:'https://evil.test'}})}),e=>e.status===302);await assert.rejects(()=>api('/test',{fetcher:async()=>Response.json({success:false,errors:[{message:'private'}]},{status:403})}),e=>!e.message.includes('private'));});
 test('per-client rate limits apply',async()=>{const limiter=new InstallLimits(state());for(let i=0;i<4;i++)assert.equal((await limiter.fetch(new Request('https://internal/',{method:'POST',body:JSON.stringify({key:'hashed-ip'})}))).status,i<3?200:429);});
+
+test('denied authorization and missing accounts produce recoverable failures without credentials',async()=>{
+ for(const mode of ['denied','empty','forbidden']){
+  const f=fixture(),{csrf}=(await f.call('session')).data;await f.call('login',{csrf,redirectUri:'https://install.test/oauth/callback'});
+  if(mode==='empty')f.env.requestApi=async()=>[];
+  if(mode==='forbidden')f.env.requestApi=async()=>{const e=new Error('private-response');e.status=403;throw e;};
+  await f.call('callback',{state:f.storage.data.get('login').state,...(mode==='denied'?{error:'access_denied'}:{code:'code'})});
+  const result=(await f.call('status')).data;assert.equal(result.stage,'failed');assert.ok(!JSON.stringify(result).includes('private-response'));assert.equal(f.storage.data.has('secret'),false);
+  assert.match(result.error,mode==='empty'?/kein zugängliches/:mode==='forbidden'?/Workers → Edit/:/nicht abgeschlossen/);
+  assert.equal((await f.call('forget',{csrf})).status,200);
+ }
+});
+test('expired authorization offers a new start and removes PKCE verifier',async()=>{
+ const f=fixture(),{csrf}=(await f.call('session')).data;await f.call('login',{csrf,redirectUri:'https://install.test/oauth/callback'});
+ f.storage.data.get('login').expiresAt=Date.now()-1;
+ assert.equal((await f.call('status')).data.stage,'failed');assert.equal(f.storage.data.has('login'),false);
+});
+test('failed deployment retains only safe recovery details and never repeats upload',async()=>{
+ const f=await authorized();let attempts=0;f.env.deployPac=async()=>{attempts++;throw new Error('private-token');};await f.call('start',{csrf:f.csrf,accountId});await f.job.alarm();await f.job.alarm();
+ const result=(await f.call('status')).data;assert.equal(attempts,1);assert.match(result.scriptName,/^pac-[a-f0-9]{12}$/);assert.equal(new URL(result.dashboardUrl).origin,'https://dash.cloudflare.com');assert.ok(!JSON.stringify(result).includes('private-token'));assert.equal(f.storage.data.has('secret'),false);
+});

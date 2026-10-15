@@ -34,7 +34,11 @@ export class InstallJob {
    return json({csrf:job.csrf,configured:Boolean(this.env.OAUTH_CLIENT_ID)});
   }
   if(!job||job.expiresAt<=Date.now())return json({error:'Sitzung abgelaufen. Bitte neu laden.'},410);
-  if(path==='/status')return this.status(job);
+  if(path==='/status'){
+   const login=job.stage==='authorizing'?await this.state.storage.get('login'):null;
+   if(job.stage==='authorizing'&&(!login||login.expiresAt<=Date.now())){await this.fail(job,'Die Anmeldung ist abgelaufen. Bitte neu beginnen.');return this.status(await this.state.storage.get('job'));}
+   return this.status(job);
+  }
   const body=await request.json();
   if(path==='/callback'){
    const login=await this.state.storage.get('login');
@@ -48,7 +52,7 @@ export class InstallJob {
     job.accounts=accounts.filter(a=>/^[a-f0-9]{32}$/.test(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name}));
     if(!job.accounts.length)throw new Error('no-accounts');
     await this.state.storage.put('secret',secret);job.stage='authorized';job.expiresAt=secret.expiresAt;await this.save(job);return json({ok:true});
-   }catch{return this.fail(job,'Cloudflare konnte nicht verbunden werden. Bitte Berechtigungen prüfen und erneut anmelden.');}
+   }catch(error){return this.fail(job,error.message==='no-accounts'?'Es wurde kein zugängliches Cloudflare-Konto gefunden. Prüfe deine Kontomitgliedschaft und die freigegebenen Konten.':error.status===403?'Cloudflare hat den Kontozugriff abgelehnt. Erlaube Account Settings → Read und Workers → Edit und melde dich erneut an.':error.status===429?'Cloudflare begrenzt gerade die Anfragen. Warte kurz und melde dich erneut an.':'Die Cloudflare-Anmeldung konnte nicht abgeschlossen werden. Bitte erneut anmelden.');}
   }
   if(body.csrf!==job.csrf)return json({error:'Ungültige Sitzung.'},403);
   if(path==='/forget'){
@@ -66,13 +70,14 @@ export class InstallJob {
    if(job.stage==='uploading'||job.stage==='ready')return this.status(job);
    if(job.stage!=='authorized'||!job.accounts.some(a=>a.id===body.accountId))return json({error:'Bitte ein verbundenes Cloudflare-Konto auswählen.'},403);
    job.accountId=body.accountId;job.scriptName='pac-'+crypto.randomUUID().replaceAll('-','').slice(0,12);job.stage='uploading';
+   job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    await this.save(job,Date.now()+100);return this.status(job);
   }
   return json({},404);
  });}
  async save(job,alarm=job.expiresAt){await this.state.storage.put('job',job);await this.state.storage.setAlarm(alarm);}
- status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error}:{})});}
- async fail(job,error){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,expiresAt:Date.now()+600000});return json({ok:false});}
+ status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
+ async fail(job,error){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),expiresAt:Date.now()+600000});return json({ok:false});}
  async alarm(){
   const job=await this.state.storage.get('job');if(!job)return;
   if(!job.version||job.expiresAt<=Date.now()){await this.state.storage.deleteAll();return;}
@@ -82,6 +87,6 @@ export class InstallJob {
    job.previewUrl=await (this.env.deployPac||deployPac)({...secret,accountId:job.accountId,scriptName:job.scriptName},this.env.PAC_PAYLOAD);
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    job.stage='ready';delete job.accounts;await this.state.storage.delete('secret');await this.save(job);
-  }catch{await this.fail(job,'Die Bereitstellung wurde unterbrochen. Prüfe dein Cloudflare-Konto auf einen Worker mit dem Namen '+job.scriptName+'. Bitte neu anmelden, bevor du erneut bereitstellst.');}
+  }catch(error){await this.fail(job,(error.status===403?'Cloudflare hat die Bereitstellung abgelehnt. Prüfe Workers → Edit. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'')+'Die Bereitstellung wurde unterbrochen. Prüfe dein Cloudflare-Konto auf einen Worker mit dem Namen '+job.scriptName+'. Bitte neu anmelden, bevor du erneut bereitstellst.');}
  }
 }

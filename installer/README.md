@@ -4,7 +4,7 @@
 
 Der Installer verwendet die direkte Cloudflare-Anmeldung (Authorization Code mit PKCE). Nutzer melden sich bei Cloudflare an, wählen ein freigegebenes Konto und bestätigen dort die Erstellung eines eigenen PAC-Workers. GitHub ist nicht erforderlich. Wolke-Zugangsdaten werden anschließend direkt im eigenen Worker hinterlegt.
 
-**Freischaltung ausstehend:** Ohne registrierten öffentlichen OAuth-Client zeigt die Seite einen Einrichtungshinweis und lässt keine Anmeldung zu. Der alte temporäre Kontoerstellungsweg wurde entfernt, da Cloudflare ihn aus Workers mit Code 1017 blockiert.
+**Öffentliche Freigabe:** Die registrierte Client-ID ist eingebaut. Für fremde Konten muss Cloudflare die Domain bestätigen und der OAuth-Client öffentlich freigegeben sein. Ein echter öffentlicher OAuth-Durchlauf steht noch aus. Ohne konfigurierte Client-ID zeigt die Seite einen Einrichtungshinweis und lässt keine Anmeldung zu. Der alte temporäre Kontoerstellungsweg wurde entfernt, da Cloudflare ihn aus Workers mit Code 1017 blockiert.
 
 ## Einmalige Einrichtung für den Betreiber
 
@@ -53,3 +53,9 @@ node scripts/check-runtime.mjs
 ```
 
 Diese Prüfungen sind nicht visuell und ersetzen keinen echten OAuth-Durchlauf mit einem registrierten Client.
+
+## Wolke-Einrichtung und Fehlerfälle
+
+Die Erfolgsseite verlinkt `/setup.html` mit WebDAV-Beispiel, App-Passwort, Ordnerregeln und der Anleitung für Secrets. Neu erstellte PAC-Instanzen zeigen bei fehlenden Angaben eine Einrichtungsseite; API-Anfragen erhalten weiterhin JSON mit `configuration_missing` oder `configuration_invalid`. Es werden nur Variablennamen, keine gesetzten Werte angezeigt.
+
+Abgelehnte Anmeldung, fehlende Konten oder Rechte und abgelaufene Sitzungen führen zu einer erklärten Fehlermeldung mit Neustartmöglichkeit. Nach einem unklaren Upload bleibt ein Link zum gewählten Worker erhalten, damit Nutzer vor einer neuen Installation auf bereits angelegte Ressourcen prüfen können. Zugangstokens werden auch dabei gelöscht.

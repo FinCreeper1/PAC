@@ -1,3 +1,4 @@
+import {missingSettings,setupResponse} from './setup.js';
 import { onRequest as authenticate, sign, safeEqual } from './legacy/_middleware.js';
 import * as materials from './legacy/api/materials.js';
 import { handleIdeas } from './ideas.js';
@@ -67,8 +68,9 @@ export class Portal {
   }
   async handle(request) {
     const env=this.env, url=new URL(request.url), path=url.pathname, method=request.method;
-    if(!env.PORTAL_PASSWORD || !env.ADMIN_PASSWORD || !env.SESSION_SECRET || (!this.cloud && ['NEXTCLOUD_WEBDAV_URL','NEXTCLOUD_USERNAME','NEXTCLOUD_APP_PASSWORD','NEXTCLOUD_ROOT'].some(key=>!env[key]))) return json({error:'Portal- und Wolke-Zugang bitte in Cloudflare unter Settings → Variables and Secrets einrichten.'},503);
-    this.cloud ||= new NextcloudStorage(env);
+    const missing=missingSettings(env,Boolean(this.cloud));
+    if(missing.length)return setupResponse(request,missing);
+    try{this.cloud ||= new NextcloudStorage(env);}catch{return setupResponse(request,[],true);}
     if(!['GET','HEAD','OPTIONS'].includes(method) && request.headers.get('origin') && request.headers.get('origin')!==url.origin) return json({error:'Fremder Ursprung.'},403);
     const session=await this.adminSession(request);
     if(path==='/admin/login' && method==='POST') {

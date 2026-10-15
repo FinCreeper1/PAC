@@ -133,5 +133,18 @@ test('unconfigured claimed deployment returns setup guidance instead of crashing
  const env={PORTAL_PASSWORD:'test',ADMIN_PASSWORD:'test',SESSION_SECRET:'test'};
  const portal=new Portal({storage:{get:async()=>null}},env);
  const response=await portal.fetch(new Request('https://portal.test/'));
- assert.equal(response.status,503);assert.match((await response.json()).error,/Variables and Secrets/);
+ assert.equal(response.status,503);assert.match(await response.text(),/Variables and Secrets/);
+});
+
+test('unconfigured portal provides setup instructions without revealing configured values',async()=>{
+ const {env,data}=setup();delete env.PORTAL_PASSWORD;env.NEXTCLOUD_APP_PASSWORD='never-show-this';
+ const portal=new Portal({storage:{get:async()=>null}},env);
+ const page=await portal.fetch(new Request('https://portal.test/'));
+ assert.equal(page.status,503);assert.match(page.headers.get('content-type'),/text\/html/);const html=await page.text();assert.match(html,/PORTAL_PASSWORD/);assert.match(html,/WebDAV/);assert.ok(!html.includes('never-show-this'));
+ const api=await portal.fetch(new Request('https://portal.test/api/materials'));assert.equal(api.status,503);const body=await api.json();assert.equal(body.code,'configuration_missing');assert.deepEqual(body.missing,['PORTAL_PASSWORD']);
+ const head=await portal.fetch(new Request('https://portal.test/',{method:'HEAD'}));assert.equal(await head.text(),'');
+});
+test('invalid Nextcloud configuration returns actionable setup response',async()=>{
+ const portal=new Portal({storage:{get:async()=>null}},{PORTAL_PASSWORD:'x',ADMIN_PASSWORD:'y',SESSION_SECRET:'secret',NEXTCLOUD_WEBDAV_URL:'http://invalid.test',NEXTCLOUD_USERNAME:'user',NEXTCLOUD_APP_PASSWORD:'private',NEXTCLOUD_ROOT:'PAC'});
+ const response=await portal.fetch(new Request('https://portal.test/api/materials'));assert.equal(response.status,503);const data=await response.json();assert.equal(data.code,'configuration_invalid');assert.ok(!JSON.stringify(data).includes('private'));
 });
