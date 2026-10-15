@@ -76,8 +76,8 @@ export class InstallJob {
   return json({},404);
  });}
  async save(job,alarm=job.expiresAt){await this.state.storage.put('job',job);await this.state.storage.setAlarm(alarm);}
- status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
- async fail(job,error){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),expiresAt:Date.now()+600000});return json({ok:false});}
+ status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.diagnostic?{diagnostic:job.diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
+ async fail(job,error,diagnostic){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,...(diagnostic?{diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),expiresAt:Date.now()+600000});return json({ok:false});}
  async alarm(){
   const job=await this.state.storage.get('job');if(!job)return;
   if(!job.version||job.expiresAt<=Date.now()){await this.state.storage.deleteAll();return;}
@@ -87,6 +87,13 @@ export class InstallJob {
    job.previewUrl=await (this.env.deployPac||deployPac)({...secret,accountId:job.accountId,scriptName:job.scriptName},this.env.PAC_PAYLOAD);
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    job.stage='ready';delete job.accounts;await this.state.storage.delete('secret');await this.save(job);
-  }catch(error){await this.fail(job,(error.status===403?'Cloudflare hat die Bereitstellung abgelehnt. Prüfe Workers → Edit. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'')+'Die Bereitstellung wurde unterbrochen. Prüfe dein Cloudflare-Konto auf einen Worker mit dem Namen '+job.scriptName+'. Bitte neu anmelden, bevor du erneut bereitstellst.');}
+  }catch(error){
+   const labels={'subdomain':'Konto-Subdomain lesen','register-subdomain':'Konto-Subdomain einrichten','subdomain-response':'Konto-Subdomain prüfen','settings':'Vorhandenen Worker prüfen','already-exists':'Worker bereits vorhanden','upload':'Worker hochladen','enable-subdomain':'Worker-Adresse aktivieren'};
+   const stage=Object.hasOwn(labels,error.stage)?error.stage:'deployment';
+   const diagnostic={stage,...(Number.isInteger(error.status)?{status:error.status}:{}),...(Number.isInteger(error.code)?{code:error.code}:{})};
+   const detail='Schritt: '+(labels[stage]||'Bereitstellung')+(diagnostic.status?' · HTTP '+diagnostic.status:'')+(diagnostic.code?' · Cloudflare-Code '+diagnostic.code:'')+'. ';
+   const advice=error.status===403&&stage==='subdomain'?'Cloudflare verweigert das Lesen der Konto-Subdomain. Diese API verlangt laut Dokumentation Workers Scripts Read oder Write; Workers → Edit allein deckt den Aufruf nicht ab. ':error.status===403?'Cloudflare hat diesen API-Aufruf abgelehnt. Die erforderliche Berechtigung hängt vom angezeigten Schritt ab. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'';
+   await this.fail(job,detail+advice+'Bitte prüfe vor einem neuen Versuch den Worker '+job.scriptName+' in deinem Konto.',diagnostic);
+  }
  }
 }

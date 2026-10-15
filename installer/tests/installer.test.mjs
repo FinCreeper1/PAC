@@ -80,3 +80,8 @@ test('failed deployment retains only safe recovery details and never repeats upl
  const f=await authorized();let attempts=0;f.env.deployPac=async()=>{attempts++;throw new Error('private-token');};await f.call('start',{csrf:f.csrf,accountId});await f.job.alarm();await f.job.alarm();
  const result=(await f.call('status')).data;assert.equal(attempts,1);assert.match(result.scriptName,/^pac-[a-f0-9]{12}$/);assert.equal(new URL(result.dashboardUrl).origin,'https://dash.cloudflare.com');assert.ok(!JSON.stringify(result).includes('private-token'));assert.equal(f.storage.data.has('secret'),false);
 });
+
+test('subdomain permission rejection identifies exact safe stage and code without upstream secrets',async()=>{
+ const f=await authorized();await f.call('start',{csrf:f.csrf,accountId});f.env.deployPac=async()=>{const e=new Error('private-token and upstream body');e.stage='subdomain';e.status=403;e.code=10000;throw e;};await f.job.alarm();
+ const result=(await f.call('status')).data;assert.deepEqual(result.diagnostic,{stage:'subdomain',status:403,code:10000});assert.match(result.error,/Workers Scripts Read/);assert.ok(!JSON.stringify(result).includes('private-token'));assert.equal(f.storage.data.has('secret'),false);
+});
