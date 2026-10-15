@@ -15,7 +15,7 @@ Portal und API laufen als JavaScript auf Cloudflare Workers. Dateien und Anwendu
 - `src/index.js`: Routing, getrennte Anmeldungen, Administration, Kalender, gemeinsame Notizen, Ortssuche, Offline-Manifest und signierte Kalenderabos.
 - `src/nextcloud.js`: WebDAV-Adapter mit derselben Ordnerstruktur und denselben Textschlüsseln wie `php/NextcloudStorage.php`. Upload und Download werden gestreamt. XML-Antworten werden mit einem Parser auf Namespaces, Statuscodes und zulässige Pfade geprüft. Zugangsdaten werden nicht an Weiterleitungsziele gesendet.
 - `src/ideas.js`: vorhandenes `ideas:board` mit Autor, Datum, Freizeitfenster und Teilnahmeliste; kompatibel zum aktuellen PHP-Backend und zum vorhandenen Ideen-Frontend.
-- `PORTAL`: ein Durable Object koordiniert gleichzeitige Anfragen. Sein Speicher enthält ausschließlich technische Admin-Sitzungen und den Ortssuchcache mit Ablaufzeit. Kalender, Routen, Ideen, Notizen und Dateien werden nicht im Durable Object gespeichert.
+- `PORTAL`: ein Durable Object koordiniert gleichzeitige Anfragen. Sein Speicher enthält technische Admin-Sitzungen, den Ortssuchcache mit Ablaufzeit und bei Einrichtung über das App-Formular die verschlüsselte Zugangskonfiguration. Kalender, Routen, Ideen, Notizen und Dateien werden nicht im Durable Object gespeichert.
 - `assets.run_worker_first: true`: Die Anmeldung wird vor statischen Abrufen geprüft.
 
 R2, D1 und Cloudflare-KV werden nicht benötigt. Das Durable Object bleibt die zentrale Koordination für einen Portal-Worker. Der Objektname `portal-v1` bleibt bei Deployments gleich.
@@ -138,3 +138,11 @@ Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine T
 ## Bestehende Instanz aktualisieren
 
 Für den vorbereiteten manuellen Update-Weg mit Erhalt der Worker-Variablen siehe [UPDATING.md](UPDATING.md). Der Installer erstellt weiterhin neue Instanzen.
+
+## Einrichtung direkt in PAC
+
+Neue Installer-Instanzen erhalten einen persönlichen Einrichtungslink. Öffne ihn, lege unterschiedliche Portal-/Adminpasswörter mit mindestens 12 Zeichen fest und trage WebDAV-Adresse, Benutzername, App-Passwort und Wolke-Ordner ein. „Einrichtung abschließen“ prüft den Lese-/Schreibzugriff mit einer temporären Datei, speichert die Konfiguration und öffnet PAC angemeldet. Sitzungsschlüssel und Kalendergeheimnis werden automatisch erzeugt.
+
+Die Konfiguration liegt AES-GCM-verschlüsselt im eigenen Durable Object. Der Schlüssel wird aus dem Worker-Secret PAC_SETUP_SECRET abgeleitet. Dieses Secret bei Updates und Sicherungen unbedingt erhalten; ohne es lässt sich die gespeicherte Konfiguration nicht mehr lesen. Die Reiseinhalte bleiben in Nextcloud. Manuell gesetzte Worker-Variablen/Secrets haben Vorrang vor Formularwerten.
+
+Der persönliche Link enthält einen geheimen Token im URL-Fragment. Er wird beim Öffnen aus der Adresszeile entfernt und gehört nur der Person, die die Instanz einrichtet. Nach erfolgreicher Einrichtung nimmt die Setup-API keine Änderungen mehr an. Vorhandene konfigurierte Instanzen bleiben unverändert nutzbar. Ältere unkonfigurierte Instanzen brauchen zunächst das Code-Update und ein zufälliges PAC_SETUP_SECRET im Cloudflare-Dashboard; anschließend ist /setup#token=DEIN_SECRET der persönliche Einrichtungslink.

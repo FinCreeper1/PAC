@@ -13,7 +13,7 @@ function apply(data){
   $('#availability').textContent=configured?'Die Anmeldung und Freigabe erfolgen direkt bei Cloudflare.':'Die direkte Cloudflare-Anmeldung wird noch freigeschaltet. Bitte später erneut öffnen.';return;
  }
  if(data.stage==='authorized'){show('account');$('#account').replaceChildren(...data.accounts.map(account=>{const option=document.createElement('option');option.value=account.id;option.textContent=account.name;return option;}));return;}
- if(data.stage==='ready'){show('result');$('#dashboard').href=data.dashboardUrl;$('#preview').href=data.previewUrl;return;}
+ if(data.stage==='ready'){show('result');$('#dashboard').href=data.dashboardUrl;$('#preview').href=data.previewUrl;$('#configure').href=data.setupUrl||data.previewUrl;return;}
  if(data.stage==='failed'){show('start');error(data.error);$('#recovery').hidden=!data.dashboardUrl;if(data.dashboardUrl){$('#recovery-link').href=data.dashboardUrl;$('#recovery-name').textContent=data.scriptName;}$('#retry').hidden=false;$('#start').disabled=true;return;}
  show('progress');$('#stage').textContent='PAC wird in deinem Cloudflare-Konto bereitgestellt …';timer=setTimeout(poll,2500);
 }

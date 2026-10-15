@@ -38,7 +38,7 @@ test('authorization never deploys until a valid account is explicitly selected',
  const f=await authorized();assert.equal(f.storage.data.get('job').stage,'authorized');
  assert.equal((await f.call('start',{csrf:f.csrf,accountId:'b'.repeat(32)})).status,403);
  await f.call('start',{csrf:f.csrf,accountId});await f.job.alarm();const result=(await f.call('status')).data;
- assert.equal(result.stage,'ready');assert.equal(f.storage.data.has('secret'),false);assert.equal(JSON.stringify(result).includes('private-token'),false);assert.match(result.dashboardUrl,/dash.cloudflare.com/);
+ assert.equal(result.stage,'ready');assert.equal(f.storage.data.has('secret'),false);assert.equal(JSON.stringify(result).includes('private-token'),false);assert.match(result.dashboardUrl,/dash.cloudflare.com/);assert.match(result.setupUrl,/\/setup#token=[a-f0-9]{64}$/);
 });
 test('expiry and deployment failure delete credentials',async()=>{
  const f=await authorized();await f.call('start',{csrf:f.csrf,accountId});f.env.deployPac=async()=>{throw new Error('private-token');};await f.job.alarm();
@@ -51,11 +51,11 @@ test('router requires same-origin POSTs and sets callback-compatible secure cook
  const bad=await route(new Request('https://install.test/api/start',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'}),f.env);assert.equal(bad.status,403);
 });
 test('deployment refuses an existing worker before uploading',async()=>{
- let uploads=0;await assert.rejects(()=>deployPac({accountId,scriptName:'pac-123456abcdef',apiToken:'token'},'payload',async(url,init)=>{if(init.body instanceof FormData)uploads++;return Response.json({success:true,result:url.endsWith('/workers/subdomain')?{subdomain:'test'}:{migration_tag:'v1'}});}),e=>e.status===409);assert.equal(uploads,0);
+ let uploads=0;await assert.rejects(()=>deployPac({accountId,scriptName:'pac-123456abcdef',apiToken:'token',setupToken:'c'.repeat(64)},'payload',async(url,init)=>{if(init.body instanceof FormData)uploads++;return Response.json({success:true,result:url.endsWith('/workers/subdomain')?{subdomain:'test'}:{migration_tag:'v1'}});}),e=>e.status===409);assert.equal(uploads,0);
 });
 test('deployment uploads SQLite binding with unique name and no redirects',async()=>{
- const calls=[];const result=await deployPac({accountId,scriptName:'pac-123456abcdef',apiToken:'token'},'payload',async(url,init)=>{new Request(url,init);calls.push({url,init});if(url.endsWith('/settings'))return Response.json({success:false},{status:404});return Response.json({success:true,result:url.endsWith('/workers/subdomain')?{subdomain:'test'}:{}});});
- assert.equal(result,'https://pac-123456abcdef.test.workers.dev');assert.ok(calls.every(c=>c.init.redirect==='manual'));const upload=calls.find(c=>c.init.body instanceof FormData);assert.equal(JSON.parse(await upload.init.body.get('metadata').text()).migrations.steps[0].new_sqlite_classes[0],'Portal');
+ const calls=[];const result=await deployPac({accountId,scriptName:'pac-123456abcdef',apiToken:'token',setupToken:'c'.repeat(64)},'payload',async(url,init)=>{new Request(url,init);calls.push({url,init});if(url.endsWith('/settings'))return Response.json({success:false},{status:404});return Response.json({success:true,result:url.endsWith('/workers/subdomain')?{subdomain:'test'}:{}});});
+ assert.equal(result,'https://pac-123456abcdef.test.workers.dev');assert.ok(calls.every(c=>c.init.redirect==='manual'));const upload=calls.find(c=>c.init.body instanceof FormData);const meta=JSON.parse(await upload.init.body.get('metadata').text());assert.equal(meta.bindings.find(b=>b.name==='PAC_SETUP_SECRET').text,'c'.repeat(64));assert.equal(JSON.parse(await upload.init.body.get('metadata').text()).migrations.steps[0].new_sqlite_classes[0],'Portal');
 });
 test('API does not disclose upstream errors or follow redirects',async()=>{await assert.rejects(()=>api('/test',{fetcher:async()=>new Response(null,{status:302,headers:{location:'https://evil.test'}})}),e=>e.status===302);await assert.rejects(()=>api('/test',{fetcher:async()=>Response.json({success:false,errors:[{message:'private'}]},{status:403})}),e=>!e.message.includes('private'));});
 test('per-client rate limits apply',async()=>{const limiter=new InstallLimits(state());for(let i=0;i<4;i++)assert.equal((await limiter.fetch(new Request('https://internal/',{method:'POST',body:JSON.stringify({key:'hashed-ip'})}))).status,i<3?200:429);});
