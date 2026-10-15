@@ -3,6 +3,14 @@ export function validateCalendar(calendar, seed, trip, journeys) {
   const fail=()=>{throw new Error('Bitte Datum, Titel, Ort, Zeiten, Status und Routen prüfen.');};
   const base=CalendarModel.normalize(seed,trip);
   if(!calendar || calendar.schemaVersion!==2 || JSON.stringify(calendar.days)!==JSON.stringify(base.days) || JSON.stringify(calendar.timeSlots)!==JSON.stringify(base.timeSlots) || !Array.isArray(calendar.events) || calendar.events.length>200) fail();
+  if (calendar.countdown != null) {
+    const settings=calendar.countdown;
+    if(typeof settings !== 'object' || typeof settings.enabled !== 'boolean') fail();
+    if(settings.deadline != null) {
+      const d=settings.deadline;
+      if(typeof d.title !== 'string' || !d.title.trim() || d.title.length>200 || typeof d.at !== 'string' || typeof d.hideAt !== 'string' || !Number.isFinite(Date.parse(d.at)) || !Number.isFinite(Date.parse(d.hideAt)) || Date.parse(d.hideAt)<=Date.parse(d.at) || !Number.isInteger(d.warningMinutes) || d.warningMinutes<0 || d.warningMinutes>10080) fail();
+    }
+  }
   const bounds=CalendarModel.bounds(calendar), ids=new Set();
   const coord=(lat,lon)=>{if(typeof lat!=='number'||typeof lon!=='number'||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180) fail();};
   for(const event of calendar.events) {

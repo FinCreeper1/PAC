@@ -162,6 +162,7 @@ function renderAgenda() {
   if (query && !count) $("#agenda").textContent = "Kein passender Termin. Versuche einen anderen Suchbegriff oder lösche die Suche.";
 }
 function render() {
+  renderCountdownSettings();
   renderAgenda();
   CalendarView.week($("#calendar"), calendar, {
     selected,
@@ -630,6 +631,7 @@ async function saveChanges() {
   if (editing && !applyDraft()) return;
   if (!dirty) return;
   saving = true;
+  $("#countdown-fields").disabled = true;
   updateSaveState();
   message("Der Reiseplan wird gespeichert. Bitte kurz warten …");
   $("#save").disabled = true;
@@ -670,6 +672,7 @@ async function saveChanges() {
     }
   } finally {
     saving = false;
+    $("#countdown-fields").disabled = sessionExpired;
     $(".workspace").inert = sessionExpired;
     $("#logout").disabled = sessionExpired;
     controls();
@@ -746,3 +749,38 @@ window.addEventListener("beforeunload", (e) => {
     if (!(e instanceof AdminSessionExpired)) message(e.message);
   }
 })();
+
+function localInput(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function renderCountdownSettings() {
+  const settings = calendar.countdown || {}, fields = $("#countdown-form").elements;
+  $("#countdown-fields").disabled = saving || sessionExpired;
+  fields.enabled.checked = settings.enabled !== false;
+  fields.deadlineEnabled.checked = Boolean(settings.deadline);
+  fields.deadlineTitle.value = settings.deadline?.title || "";
+  fields.deadlineAt.value = localInput(settings.deadline?.at);
+  fields.deadlineHideAt.value = localInput(settings.deadline?.hideAt);
+  fields.warningMinutes.value = settings.deadline?.warningMinutes ?? 60;
+}
+$("#countdown-form").onsubmit = event => {
+  event.preventDefault();
+  if (!calendar || saving || sessionExpired) return;
+  const fields = event.currentTarget.elements;
+  const settings = { enabled: fields.enabled.checked };
+  if (fields.deadlineEnabled.checked) {
+    const at = new Date(fields.deadlineAt.value), hideAt = new Date(fields.deadlineHideAt.value);
+    const title = fields.deadlineTitle.value.trim(), warningMinutes = Number(fields.warningMinutes.value);
+    if (!title || !Number.isFinite(at.getTime()) || !Number.isFinite(hideAt.getTime()) || hideAt <= at || !Number.isInteger(warningMinutes) || warningMinutes < 0 || warningMinutes > 10080) {
+      message("Bitte Titel, Abgabezeit und eine spätere Ausblendzeit eintragen. Die Warnzeit muss zwischen 0 und 10080 Minuten liegen.");
+      return;
+    }
+    settings.deadline = {title, at: at.toISOString(), hideAt: hideAt.toISOString(), warningMinutes};
+  }
+  checkpoint();
+  calendar.countdown = settings;
+  controls();
+  message("Countdown-Einstellungen übernommen. Bitte oben Änderungen speichern.");
+};

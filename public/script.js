@@ -13,9 +13,11 @@
   }
   const timer = value.closest(".submission-timer");
   let loaded = false;
+  let settings = {};
   let targets = [];
   function loadTargets() {
     loaded = true;
+    settings = portalCalendar.countdown || {};
     targets = portalCalendar.events.filter(item => item.timing === "scheduled")
       .map(item => {
         const date = portalCalendar.days[item.day - 1]?.isoDate;
@@ -41,8 +43,13 @@
     clearTimeout(timeout);
     const now = new Date();
     const current = berlinTime(now);
-    const next = targets.find(item => item.start > current);
-    if (timer) timer.hidden = loaded && !next;
+    const deadline = settings.deadline;
+    const deadlineActive = deadline && Date.parse(deadline.hideAt) > now.getTime();
+    const next = deadlineActive ? {title: deadline.title, start: Date.parse(deadline.at), deadline: true} : targets.find(item => item.start > current);
+    if (timer) {
+      timer.hidden = settings.enabled === false || (loaded && !next);
+      timer.classList.toggle("submission-timer-warning", Boolean(deadlineActive && Date.parse(deadline.at) - now.getTime() <= deadline.warningMinutes * 60000));
+    }
     if (!next) {
       label.textContent = loaded ? "Keine kommenden Termine" : "Nächster Termin wird geladen …";
       value.hidden = true;
@@ -51,10 +58,12 @@
     }
     value.hidden = false;
     const date = new Date(next.start).toLocaleDateString("de-DE", {
-      timeZone: "UTC", weekday: "short", day: "2-digit", month: "2-digit",
+      timeZone: next.deadline ? undefined : "UTC", weekday: "short", day: "2-digit", month: "2-digit",
     });
-    label.textContent = `${next.title} · ${date}, ${next.time} Uhr`;
-    const seconds = Math.max(0, Math.round((next.start - current) / 1000));
+    const remaining = next.start - (next.deadline ? now.getTime() : current);
+    const clock = next.deadline ? new Date(next.start).toLocaleTimeString("de-DE", {hour:"2-digit", minute:"2-digit"}) : next.time;
+    label.textContent = `${next.title} · ${date}, ${clock} Uhr${next.deadline && remaining <= 0 ? " · Abgabefrist abgelaufen" : next.deadline && remaining <= deadline.warningMinutes * 60000 ? " · Abgabe steht bevor" : ""}`;
+    const seconds = Math.max(0, Math.round(remaining / 1000));
     const time = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
       .map(number => String(number).padStart(2, "0")).join(":");
     if (digits.length !== time.length) {

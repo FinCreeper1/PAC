@@ -35,12 +35,20 @@ test('admin isolation, CSRF, publication and stale revision rejection',async()=>
  assert.equal((await call('/api/admin/calendar')).status,401);
  const current=await (await call('/api/admin/calendar',{headers:{cookie}})).json();
  current.calendar.events[0].title='Worker publication';
+ current.calendar.countdown={enabled:true,deadline:{title:'Abgabe',at:'2026-10-20T12:00:00Z',hideAt:'2026-10-21T12:00:00Z',warningMinutes:60}};
  const options={method:'PUT',headers:{cookie,'content-type':'application/json'},body:JSON.stringify(current)};
  assert.equal((await call('/api/admin/calendar',options)).status,403);
  options.headers['x-csrf-token']=current.csrf;
  const response=await call('/api/admin/calendar',options);assert.equal(response.status,200,await response.clone().text());
  assert.equal((await call('/api/admin/calendar',options)).status,409);
+ const saved=await (await call('/api/admin/calendar',{headers:{cookie}})).json();assert.deepEqual(saved.calendar.countdown,current.calendar.countdown);
  const portal=await login(call);assert.equal((await (await call('/data/calendar.json',{headers:{cookie:portal}})).json()).events[0].title,'Worker publication');
+});
+test('countdown settings reject invalid deadlines',()=>{
+ for(const countdown of [{enabled:'yes'},{enabled:true,deadline:{title:'Abgabe',at:'bad',hideAt:'bad',warningMinutes:60}},{enabled:true,deadline:{title:'Abgabe',at:'2026-10-21T12:00:00Z',hideAt:'2026-10-20T12:00:00Z',warningMinutes:60}}]){
+  const calendar=CalendarModel.normalize(seed,trip);calendar.countdown=countdown;
+  assert.throws(()=>validateCalendar(calendar,seed,trip,journeys));
+ }
 });
 test('invalid calendar values are rejected',()=>{
  const calendar=CalendarModel.normalize(seed,trip);validateCalendar(calendar,seed,trip,journeys);
