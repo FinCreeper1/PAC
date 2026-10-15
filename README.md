@@ -146,3 +146,7 @@ Neue Installer-Instanzen erhalten einen persönlichen Einrichtungslink. Öffne i
 Die Konfiguration liegt AES-GCM-verschlüsselt im eigenen Durable Object. Der Schlüssel wird aus dem Worker-Secret PAC_SETUP_SECRET abgeleitet. Dieses Secret bei Updates und Sicherungen unbedingt erhalten; ohne es lässt sich die gespeicherte Konfiguration nicht mehr lesen. Die Reiseinhalte bleiben in Nextcloud. Manuell gesetzte Worker-Variablen/Secrets haben Vorrang vor Formularwerten.
 
 Der persönliche Link enthält einen geheimen Token im URL-Fragment. Er wird beim Öffnen aus der Adresszeile entfernt und gehört nur der Person, die die Instanz einrichtet. Nach erfolgreicher Einrichtung nimmt die Setup-API keine Änderungen mehr an. Vorhandene konfigurierte Instanzen bleiben unverändert nutzbar. Ältere unkonfigurierte Instanzen brauchen zunächst das Code-Update und ein zufälliges PAC_SETUP_SECRET im Cloudflare-Dashboard; anschließend ist /setup#token=DEIN_SECRET der persönliche Einrichtungslink.
+
+### Reisedaten im Setup
+
+Wähle zwischen einer neuen Reise und der Übernahme einer vorhandenen Wolken-Reise. Neue Reisen benötigen Titel, Beginn, Ende, Startort und Ziel; Teilnehmende werden optional zeilenweise eingetragen. Der Kalender startet ohne Demo-Termine mit genau den ausgewählten Tagen. Bei einer bereits gespeicherten Reise bricht „Neue Reise“ ohne Überschreiben ab; mit „Vorhandene Reise übernehmen“ bleiben Kalender, Dateien und Metadaten unverändert. Die Login-Seite verwendet anschließend die Reisedaten aus der Wolke.
