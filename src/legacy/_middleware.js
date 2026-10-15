@@ -10,14 +10,14 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function loginPage(message = '') {
+function loginPage(message = '', details = trip) {
   const notice = message ? `<p class="error">${escapeHtml(message)}</p>` : '';
   return new Response(`<!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zugang · ${escapeHtml(trip.title)}</title><style>
+<title>Zugang · ${escapeHtml(details.title)}</title><style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#fbfcfa;color:#171816;font:15px system-ui,sans-serif}
 main{width:min(380px,100%);border-top:3px solid #c81d25;padding-top:28px}h1{margin:0 0 8px;font-size:28px;letter-spacing:-.04em}p{margin:0 0 28px;color:#676a64;line-height:1.55}label{display:block;margin-bottom:7px;font-size:13px;font-weight:650}input{width:100%;height:44px;padding:0 12px;border:1px solid #bfc2bc;border-radius:6px;background:white;font:inherit}input:focus{outline:3px solid rgba(200,29,37,.2);border-color:#c81d25}button{width:100%;height:44px;margin-top:12px;border:0;border-radius:6px;background:#171816;color:white;font:650 14px system-ui,sans-serif;cursor:pointer}.error{margin:0 0 18px;color:#a5151b;font-size:13px}.meta{margin-top:24px;font-size:11px}
-</style></head><body><main><h1>${escapeHtml(trip.title)}</h1><p>Dieser Kalender ist nur für Teilnehmende zugänglich.</p>${notice}<form method="post" action="/__login"><label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Kalender öffnen</button></form><p class="meta">${escapeHtml(trip.startDate)} – ${escapeHtml(trip.endDate)}</p></main></body></html>`, {
+</style></head><body><main><h1>${escapeHtml(details.title)}</h1><p>Dieser Kalender ist nur für Teilnehmende zugänglich.</p>${notice}<form method="post" action="/__login"><label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Kalender öffnen</button></form><p class="meta">${escapeHtml(details.startDate)} – ${escapeHtml(details.endDate)}</p></main></body></html>`, {
     status: message ? 401 : 200,
     headers: { 'content-type': 'text/html; charset=UTF-8', 'cache-control': 'no-store' }
   });
@@ -62,7 +62,7 @@ export async function onRequest(context) {
   if (url.pathname === '/__login' && request.method === 'POST') {
     const form = await request.formData();
     if (!safeEqual(String(form.get('password') || ''), env.PORTAL_PASSWORD)) {
-      return loginPage('Das Passwort ist nicht richtig.');
+      return loginPage('Das Passwort ist nicht richtig.',env.getPortalTrip?await env.getPortalTrip():trip);
     }
     const session = await createSession(env.SESSION_SECRET);
     return new Response(null, {
@@ -87,7 +87,7 @@ export async function onRequest(context) {
     });
   }
 
-  if (!(await validSession(request, env.SESSION_SECRET))) return url.pathname.startsWith('/api/') ? Response.json({error:'Bitte anmelden.'}, {status:401}) : loginPage();
+  if (!(await validSession(request, env.SESSION_SECRET))) return url.pathname.startsWith('/api/') ? Response.json({error:'Bitte anmelden.'}, {status:401}) : loginPage('',env.getPortalTrip?await env.getPortalTrip():trip);
 
   const response = await context.next();
   const protectedResponse = new Response(response.body, response);

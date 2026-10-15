@@ -149,11 +149,11 @@ export class Portal {
       if(route) return json(route);
     }
     if(session && (path.startsWith('/shared/') || path.startsWith('/data/routes/') || path==='/api/apple-maps-token')) return path.startsWith('/api/') ? mapsToken({env}) : this.asset(request,path);
-    return authenticate({request,env,next:()=>this.portal(request)});
+    return authenticate({request,env:{...env,getPortalTrip:async()=>(await this.snapshot()).value.trip},next:()=>this.portal(request)});
   }
   async adminLogin(request,error=false) {
     // Reuse the existing login page, including its escaping and visual design.
-    const page=await authenticate({request:new Request(new URL('/',request.url)),env:this.env,next:()=>new Response()});
+    const page=await authenticate({request:new Request(new URL('/',request.url)),env:{...this.env,getPortalTrip:async()=>(await this.snapshot()).value.trip},next:()=>new Response()});
     return new Response((await page.text()).replace('action="/__login"','action="/admin/login"').replace('Kalender öffnen','Admin öffnen').replace('Dieser Kalender ist nur für Teilnehmende zugänglich.',error?'Das Adminpasswort ist nicht richtig.':'Mit dem Passwort für die Reiseleitung anmelden.'),{status:error?401:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});
   }
   async asset(request,path=new URL(request.url).pathname) {
