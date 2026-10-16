@@ -58,7 +58,7 @@ test('deployment uploads SQLite binding with unique name and no redirects',async
  assert.equal(result,'https://pac-123456abcdef.test.workers.dev');assert.ok(calls.every(c=>c.init.redirect==='manual'));const upload=calls.find(c=>c.init.body instanceof FormData);const meta=JSON.parse(await upload.init.body.get('metadata').text());assert.equal(meta.bindings.find(b=>b.name==='PAC_SETUP_SECRET').text,'c'.repeat(64));assert.equal(JSON.parse(await upload.init.body.get('metadata').text()).migrations.steps[0].new_sqlite_classes[0],'Portal');
 });
 test('API does not disclose upstream errors or follow redirects',async()=>{await assert.rejects(()=>api('/test',{fetcher:async()=>new Response(null,{status:302,headers:{location:'https://evil.test'}})}),e=>e.status===302);await assert.rejects(()=>api('/test',{fetcher:async()=>Response.json({success:false,errors:[{message:'private'}]},{status:403})}),e=>!e.message.includes('private'));});
-test('per-client rate limits apply',async()=>{const limiter=new InstallLimits(state());for(let i=0;i<4;i++)assert.equal((await limiter.fetch(new Request('https://internal/',{method:'POST',body:JSON.stringify({key:'hashed-ip'})}))).status,i<3?200:429);});
+test('per-client rate limits apply',async()=>{const limiter=new InstallLimits(state());for(let i=0;i<31;i++)assert.equal((await limiter.fetch(new Request('https://internal/',{method:'POST',body:JSON.stringify({key:'hashed-ip'})}))).status,i<30?200:429);});
 
 test('denied authorization and missing accounts produce recoverable failures without credentials',async()=>{
  for(const mode of ['denied','empty','forbidden']){
@@ -121,4 +121,13 @@ test('switching account forgets tokens, account grants and pending login before 
  const next=(await f.call('session')).data;assert.notEqual(next.csrf,f.csrf);
  assert.equal((await f.call('status')).data.stage,'idle');
  assert.equal((await f.call('pacs',{csrf:next.csrf,accountId})).status,403);
+});
+
+test('global login limit allows 300 attempts across IPs and resets in the next hour',async()=>{
+ const storage=state(),limiter=new InstallLimits(storage);
+ const attempt=key=>limiter.fetch(new Request('https://internal/',{method:'POST',body:JSON.stringify({key})}));
+ for(let i=0;i<300;i++)assert.equal((await attempt('ip-'+i)).status,200);
+ assert.equal((await attempt('another-ip')).status,429);
+ storage.data.set('global',{window:Math.floor(Date.now()/3600000)-1,count:300});
+ assert.equal((await attempt('another-ip')).status,200);
 });
