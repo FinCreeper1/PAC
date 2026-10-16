@@ -1,4 +1,4 @@
-import {api,deployPac} from './cloudflare.js';
+import {api,deployPac,listPacs} from './cloudflare.js';
 import {beginLogin,exchangeCode} from './oauth.js';
 const json=(value,status=200)=>Response.json(value,{status,headers:{'cache-control':'no-store'}});
 const hour=3600000;
@@ -65,6 +65,13 @@ export class InstallJob {
    const limiter=await this.env.LIMITS.get(this.env.LIMITS.idFromName('limits')).fetch('https://internal/',{method:'POST',body:JSON.stringify({key:body.rateKey})});if(!limiter.ok)return limiter;
    const login=beginLogin(this.env.OAUTH_CLIENT_ID,body.redirectUri);login.expiresAt=Date.now()+600000;
    await this.state.storage.put('login',login);job.stage='authorizing';await this.save(job);return json({url:login.url});
+  }
+  if(path==='/pacs'){
+   if(job.stage!=='authorized'||!job.accounts.some(a=>a.id===body.accountId))return json({error:'Bitte ein verbundenes Cloudflare-Konto auswählen.'},403);
+   const secret=await this.state.storage.get('secret');
+   if(!secret||secret.expiresAt<=Date.now())return json({error:'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.'},410);
+   try{return json({pacs:await listPacs(body.accountId,secret.apiToken,this.env.requestApi||api)});}
+   catch(error){return json({error:error.status===403?'Cloudflare hat das Lesen der Worker abgelehnt. Bitte die Workers-Leserechte prüfen.':'Die vorhandenen PACs konnten nicht geladen werden. Bitte erneut versuchen.'},error.status===403?403:502);}
   }
   if(path==='/start'){
    if(job.stage==='uploading'||job.stage==='ready')return this.status(job);

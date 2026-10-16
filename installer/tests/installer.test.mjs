@@ -85,3 +85,14 @@ test('subdomain permission rejection identifies exact safe stage and code withou
  const f=await authorized();await f.call('start',{csrf:f.csrf,accountId});f.env.deployPac=async()=>{const e=new Error('private-token and upstream body');e.stage='subdomain';e.status=403;e.code=10000;throw e;};await f.job.alarm();
  const result=(await f.call('status')).data;assert.deepEqual(result.diagnostic,{stage:'subdomain',status:403,code:10000});assert.match(result.error,/Workers Scripts Read/);assert.ok(!JSON.stringify(result).includes('private-token'));assert.equal(f.storage.data.has('secret'),false);
 });
+
+test('existing PAC listing is authorized per account and never deploys or discloses tokens',async()=>{
+ const f=await authorized();let calls=[];
+ f.env.requestApi=async(path,options)=>{calls.push(path);assert.equal(options.token,'private-token');return path.endsWith('/scripts')?[{id:'pac-123456abcdef',created_on:'2026-10-15'},{id:'other-worker'},{id:'pac-install'},{id:'pac-<unsafe>'}]:{subdomain:'owner'};};
+ assert.equal((await f.call('pacs',{csrf:'wrong',accountId})).status,403);
+ assert.equal((await f.call('pacs',{csrf:f.csrf,accountId:'b'.repeat(32)})).status,403);assert.equal(calls.length,0);
+ const result=await f.call('pacs',{csrf:f.csrf,accountId});assert.equal(result.status,200);assert.equal(result.data.pacs.length,1);
+ assert.equal(result.data.pacs[0].url,'https://pac-123456abcdef.owner.workers.dev');assert.ok(!JSON.stringify(result).includes('private-token'));
+ assert.equal(f.storage.data.get('job').stage,'authorized');assert.equal(calls.length,2);
+ f.env.requestApi=async()=>{throw {status:403,message:'private upstream'};};const failure=await f.call('pacs',{csrf:f.csrf,accountId});assert.equal(failure.status,403);assert.ok(!JSON.stringify(failure).includes('private upstream'));
+});

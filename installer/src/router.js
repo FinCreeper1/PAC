@@ -14,8 +14,8 @@ export async function route(request,env) {
   let session=readSession(request),fresh=false;
   if(path==='/api/session'&&method==='GET'&&!session){session=Array.from(crypto.getRandomValues(new Uint8Array(32)),byte=>byte.toString(16).padStart(2,'0')).join('');fresh=true;}
   if(!session)return reply({error:'Bitte die Seite neu laden.'},401);
-  if(!['/api/session','/api/login','/api/start','/api/status','/api/forget','/oauth/callback'].includes(path))return reply({error:'Nicht gefunden.'},404);
-  if((['/api/login','/api/start','/api/forget'].includes(path))!==(method==='POST'))return reply({error:'Methode nicht erlaubt.'},405);
+  if(!['/api/session','/api/login','/api/start','/api/pacs','/api/status','/api/forget','/oauth/callback'].includes(path))return reply({error:'Nicht gefunden.'},404);
+  if((['/api/login','/api/start','/api/pacs','/api/forget'].includes(path))!==(method==='POST'))return reply({error:'Methode nicht erlaubt.'},405);
   let body;
   if(method==='POST') {
    const raw=await request.text();if(raw.length>2048)return reply({error:'Anfrage zu groß.'},413);
