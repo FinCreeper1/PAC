@@ -112,3 +112,13 @@ test('named deployment checks collisions before starting and allows another name
  assert.equal((await f.call('start',{csrf:f.csrf,accountId,tripName:'Berlin 2027'})).status,200);
  assert.equal(f.storage.data.get('job').scriptName,'pac-berlin-2027');
 });
+
+test('switching account forgets tokens, account grants and pending login before a fresh session',async()=>{
+ const f=await authorized();assert.ok(f.storage.data.has('secret'));
+ assert.equal((await f.call('forget',{csrf:'wrong'})).status,403);assert.ok(f.storage.data.has('secret'));
+ assert.equal((await f.call('forget',{csrf:f.csrf})).status,200);
+ assert.equal(f.storage.data.has('secret'),false);assert.equal(f.storage.data.has('job'),false);assert.equal(f.storage.data.has('login'),false);
+ const next=(await f.call('session')).data;assert.notEqual(next.csrf,f.csrf);
+ assert.equal((await f.call('status')).data.stage,'idle');
+ assert.equal((await f.call('pacs',{csrf:next.csrf,accountId})).status,403);
+});

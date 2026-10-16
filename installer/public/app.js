@@ -5,7 +5,7 @@ async function api(path,body){
  const data=await response.json();if(!response.ok){const error=new Error(data.error||'Die Anfrage ist fehlgeschlagen.');error.status=response.status;throw error;}return data;
 }
 function error(message){$('#error').textContent=message;$('#error').hidden=false;}
-function show(view){for(const name of ['start','account','progress','result'])$('#'+name+'-view').hidden=name!==view;}
+function show(view){for(const name of ['start','account','progress','result','switch'])$('#'+name+'-view').hidden=name!==view;}
 function apply(data){
  clearTimeout(timer);$('#error').hidden=true;$('#retry').hidden=true;$('#recovery').hidden=true;
  if(data.stage==='idle'||data.stage==='authorizing'){
@@ -18,14 +18,16 @@ function apply(data){
  show('progress');$('#stage').textContent='PAC wird in deinem Cloudflare-Konto bereitgestellt …';timer=setTimeout(poll,2500);
 }
 async function poll(){try{apply(await api('status'));}catch(e){error(e.message);if(e.status===410||e.status===401){show('start');$('#start').disabled=true;$('#retry').hidden=false;}else timer=setTimeout(poll,6000);}}
-$('#setup-form').addEventListener('submit',async event=>{
+async function startLogin(event){
  event.preventDefault();if(busy)return;busy=true;$('#start').disabled=true;
  try{const {url}=await api('login',{});const target=new URL(url);if(target.origin!=='https://dash.cloudflare.com')throw new Error('Ungültige Anmeldung.');location.assign(target.href);}catch(e){error(e.message);$('#start').disabled=!configured;busy=false;}
-});
+}
+$('#setup-form').addEventListener('submit',startLogin);
+$('#switch-continue').addEventListener('click',startLogin);
 $('#deploy-form').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{apply(await api('start',{accountId:$('#account').value,tripName:$('#trip-name').value}));}catch(e){error(e.message);}finally{busy=false;}});
 async function forget(){try{await api('forget',{});location.reload();}catch(e){if(e.status===410||e.status===401){location.reload();return;}error(e.message);}}
 $('#forget').addEventListener('click',forget);$('#retry').addEventListener('click',forget);
-(async()=>{try{const session=await api('session');csrf=session.csrf;configured=session.configured;apply(await api('status'));if(new URL(location.href).searchParams.get('login')==='invalid'){error('Die Rückkehr von Cloudflare konnte keiner gültigen Anmeldung zugeordnet werden. Bitte erneut anmelden.');history.replaceState(null,'','/');}}catch(e){error(e.message);$('#retry').hidden=false;}})();
+(async()=>{try{const session=await api('session');csrf=session.csrf;configured=session.configured;apply(await api('status'));if(new URL(location.href).searchParams.get('switch-account')==='1')show('switch');if(new URL(location.href).searchParams.get('login')==='invalid'){error('Die Rückkehr von Cloudflare konnte keiner gültigen Anmeldung zugeordnet werden. Bitte erneut anmelden.');history.replaceState(null,'','/');}}catch(e){error(e.message);$('#retry').hidden=false;}})();
 
 async function loadPacs(){
  const request=++pacsRequest, accountId=$('#account').value;
@@ -48,3 +50,10 @@ async function loadPacs(){
 }
 $('#account').addEventListener('change',loadPacs);
 $('#pacs-refresh').addEventListener('click',loadPacs);
+
+for(const button of document.querySelectorAll('.switch-account'))button.addEventListener('click',async()=>{
+ if(busy||!csrf)return;
+ busy=true;++pacsRequest;clearTimeout(timer);
+ try{await api('forget',{});location.assign('/?switch-account=1');}
+ catch(e){if(e.status===410||e.status===401){location.assign('/?switch-account=1');return;}error(e.message);busy=false;}
+});
