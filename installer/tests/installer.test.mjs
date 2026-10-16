@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {beginLogin,exchangeCode} from '../src/oauth.js';
-import {deployPac,api} from '../src/cloudflare.js';
+import {deployPac,api,pacName} from '../src/cloudflare.js';
 import {InstallJob,InstallLimits} from '../src/jobs.js';
 import {route} from '../src/router.js';
 function state(){const data=new Map();return {data,storage:{get:async key=>structuredClone(data.get(key)),put:async(key,value)=>{if(typeof key==='string')data.set(key,structuredClone(value));else for(const [k,v]of Object.entries(key))data.set(k,structuredClone(v));},delete:async key=>{for(const k of Array.isArray(key)?key:[key])data.delete(k);},deleteAll:async()=>data.clear(),setAlarm:async at=>{data.set('_alarm',at);},deleteAlarm:async()=>data.delete('_alarm'),list:async(options={})=>new Map([...data].filter(([key])=>key.startsWith(options.prefix||'')&&key!=='_alarm').sort(([a],[b])=>a.localeCompare(b)))},blockConcurrencyWhile:fn=>fn()};}
@@ -95,4 +95,20 @@ test('existing PAC listing is authorized per account and never deploys or disclo
  assert.equal(result.data.pacs[0].url,'https://pac-123456abcdef.owner.workers.dev');assert.ok(!JSON.stringify(result).includes('private-token'));
  assert.equal(f.storage.data.get('job').stage,'authorized');assert.equal(calls.length,2);
  f.env.requestApi=async()=>{throw {status:403,message:'private upstream'};};const failure=await f.call('pacs',{csrf:f.csrf,accountId});assert.equal(failure.status,403);assert.ok(!JSON.stringify(failure).includes('private upstream'));
+});
+
+test('trip names create safe readable addresses and reject reserved or empty names',()=>{
+ assert.equal(pacName('Köln & München 2027'),'pac-koeln-muenchen-2027');
+ assert.equal(pacName('  Berlin 2027  '),'pac-berlin-2027');
+ assert.ok(pacName('a'.repeat(200)).length<=63);
+ for(const title of ['', '---', 'install', 'a'.repeat(201)])assert.throws(()=>pacName(title));
+});
+test('named deployment checks collisions before starting and allows another name',async()=>{
+ const f=await authorized();
+ f.env.requestApi=async()=>({});
+ assert.equal((await f.call('start',{csrf:f.csrf,accountId,tripName:'Berlin 2027'})).status,409);
+ assert.equal(f.storage.data.get('job').stage,'authorized');
+ f.env.requestApi=async()=>{throw {status:404};};
+ assert.equal((await f.call('start',{csrf:f.csrf,accountId,tripName:'Berlin 2027'})).status,200);
+ assert.equal(f.storage.data.get('job').scriptName,'pac-berlin-2027');
 });

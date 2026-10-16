@@ -16,10 +16,17 @@ export async function api(path,{method='GET',token,body,form,fetcher=fetch,stage
  }
  return payload.result;
 }
+export function pacName(title) {
+ if(typeof title!=='string'||!title.trim()||title.length>200)throw new Error('Bitte einen Reisenamen eingeben (höchstens 200 Zeichen).');
+ const slug=title.trim().toLowerCase().replaceAll('ä','ae').replaceAll('ö','oe').replaceAll('ü','ue').replaceAll('ß','ss').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,59).replace(/-$/,'');
+ if(!slug||slug==='install')throw new Error('Bitte einen anderen Reisenamen mit Buchstaben oder Zahlen wählen.');
+ return 'pac-'+slug;
+}
+const isPacName=name=>typeof name==='string'&&name.length<=63&&/^pac-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)&&name!=='pac-install';
 export async function deployPac(secret,payload,fetcher=fetch) {
  const prefix='/accounts/'+secret.accountId+'/workers',token=secret.apiToken,name=secret.scriptName;
  if(!/^[a-f0-9]{64}$/.test(secret.setupToken||''))throw new ApiError(400,'setup-token');
- if(!/^[a-f0-9]{32}$/.test(secret.accountId)||!/^pac-[a-f0-9]{12}$/.test(name||''))throw new ApiError(400,'deployment-target');
+ if(!/^[a-f0-9]{32}$/.test(secret.accountId)||!isPacName(name))throw new ApiError(400,'deployment-target');
  let subdomain;
  try{subdomain=(await api(prefix+'/subdomain',{token,fetcher,stage:'subdomain'}))?.subdomain;}catch(error){if(error.status!==404)throw error;}
  if(!subdomain) {
@@ -41,7 +48,7 @@ export async function listPacs(accountId,token,requestApi=api) {
  const prefix='/accounts/'+accountId+'/workers';
  const scripts=await requestApi(prefix+'/scripts',{token,stage:'list-workers'});
  if(!Array.isArray(scripts))throw new ApiError(502,'list-workers');
- const matching=scripts.filter(script=>/^pac-[a-f0-9]{12}$/.test(script.id||''));
+ const matching=scripts.filter(script=>isPacName(script.id));
  let subdomain;
  if(matching.length){try{subdomain=(await requestApi(prefix+'/subdomain',{token,stage:'subdomain'}))?.subdomain;}catch(error){if(error.status!==404)throw error;}}
  if(subdomain&&!/^[a-z0-9-]+$/.test(subdomain))throw new ApiError(502,'subdomain-response');
