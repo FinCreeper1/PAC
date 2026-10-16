@@ -1,7 +1,8 @@
+const base=location.pathname.startsWith('/install/')?'/install':'';
 const $=selector=>document.querySelector(selector);
 let csrf='',timer,busy=false,configured=false,pacsRequest=0;
 async function api(path,body){
- const response=await fetch('/api/'+path,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify({...body,csrf}):undefined,cache:'no-store'});
+ const response=await fetch(base+'/api/'+path,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify({...body,csrf}):undefined,cache:'no-store'});
  const data=await response.json();if(!response.ok){const error=new Error(data.error||'Die Anfrage ist fehlgeschlagen.');error.status=response.status;throw error;}return data;
 }
 function error(message){$('#error').textContent=message;$('#error').hidden=false;}
@@ -15,7 +16,7 @@ function apply(data){
  if(data.stage==='authorized'){show('account');$('#account').replaceChildren(...data.accounts.map(account=>{const option=document.createElement('option');option.value=account.id;option.textContent=account.name;return option;}));loadPacs();return;}
  if(data.stage==='ready'){show('result');$('#dashboard').href=data.dashboardUrl;$('#preview').href=data.previewUrl;$('#configure').href=data.setupUrl||data.previewUrl;return;}
  if(data.stage==='failed'){show('start');error(data.error);$('#recovery').hidden=!data.dashboardUrl;if(data.dashboardUrl){$('#recovery-link').href=data.dashboardUrl;$('#recovery-name').textContent=data.scriptName;}$('#retry').hidden=false;$('#start').disabled=true;return;}
- show('progress');$('#stage').textContent='PAC wird in deinem Cloudflare-Konto bereitgestellt …';timer=setTimeout(poll,2500);
+ show('progress');$('#stage').textContent='PAC wird in Ihrem Cloudflare-Konto bereitgestellt …';timer=setTimeout(poll,2500);
 }
 async function poll(){try{apply(await api('status'));}catch(e){error(e.message);if(e.status===410||e.status===401){show('start');$('#start').disabled=true;$('#retry').hidden=false;}else timer=setTimeout(poll,6000);}}
 async function startLogin(event){
@@ -24,9 +25,9 @@ async function startLogin(event){
 }
 $('#setup-form').addEventListener('submit',startLogin);
 $('#deploy-form').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{apply(await api('start',{accountId:$('#account').value,tripName:$('#trip-name').value}));}catch(e){error(e.message);}finally{busy=false;}});
-async function forget(){if(busy)return;busy=true;++pacsRequest;clearTimeout(timer);try{await api('forget',{});location.assign('/');}catch(e){if(e.status===410||e.status===401){location.assign('/');return;}error(e.message);busy=false;}}
+async function forget(){if(busy)return;busy=true;++pacsRequest;clearTimeout(timer);try{await api('forget',{});location.assign(base+'/');}catch(e){if(e.status===410||e.status===401){location.assign(base+'/');return;}error(e.message);busy=false;}}
 $('#forget').addEventListener('click',forget);$('#retry').addEventListener('click',forget);
-(async()=>{try{const session=await api('session');csrf=session.csrf;configured=session.configured;apply(await api('status'));if(new URL(location.href).searchParams.get('login')==='invalid'){error('Die Rückkehr von Cloudflare konnte keiner gültigen Anmeldung zugeordnet werden. Bitte erneut anmelden.');history.replaceState(null,'','/');}}catch(e){error(e.message);$('#retry').hidden=false;}})();
+(async()=>{try{const session=await api('session');csrf=session.csrf;configured=session.configured;apply(await api('status'));if(new URL(location.href).searchParams.get('login')==='invalid'){error('Die Rückkehr von Cloudflare konnte keiner gültigen Anmeldung zugeordnet werden. Bitte erneut anmelden.');history.replaceState(null,'',base+'/');}}catch(e){error(e.message);$('#retry').hidden=false;}})();
 
 async function loadPacs(){
  const request=++pacsRequest, accountId=$('#account').value;
@@ -35,7 +36,7 @@ async function loadPacs(){
  try{
   const data=await api('pacs',{accountId});
   if(request!==pacsRequest)return;
-  $('#pacs-status').textContent=data.pacs.length?'Wähle ein PAC zum Öffnen oder Verwalten.':'In diesem Konto wurden keine PAC-Worker gefunden.';
+  $('#pacs-status').textContent=data.pacs.length?'Wählen Sie ein PAC zum Öffnen oder Verwalten.':'In diesem Konto wurden keine PAC-Worker gefunden.';
   for(const pac of data.pacs){
    const item=document.createElement('li'),name=document.createElement('strong');name.textContent=pac.name;item.append(name);
    const links=document.createElement('div');links.className='pac-links';

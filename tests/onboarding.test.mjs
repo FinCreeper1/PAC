@@ -1,6 +1,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {Portal} from '../src/index.js';
-import {openConfiguration,validateTrip,initializeTrip} from '../src/onboarding.js';
+import {runInNewContext} from 'node:vm';
+import {validateSetup,setupScript,openConfiguration,validateTrip,initializeTrip} from '../src/onboarding.js';
 import {mockWebdav} from './helpers/webdav.mjs';
 const secret='a'.repeat(64),origin='https://portal.test';
 const input={TRIP_MODE:'new',TRIP_TITLE:'Herbstreise',TRIP_START:'2027-10-17',TRIP_END:'2027-10-19',TRIP_ORIGIN:'Hamburg',TRIP_DESTINATION:'Bremen',TRIP_PARTICIPANTS:'Alex\nKim\nAlex',TRIP_TIMEZONE:'Europe/Berlin',PORTAL_PASSWORD:'participant-pass-123',confirmPortal:'participant-pass-123',ADMIN_PASSWORD:'admin-password-456',confirmAdmin:'admin-password-456',NEXTCLOUD_WEBDAV_URL:'https://cloud.test/remote.php/dav/files/test',NEXTCLOUD_USERNAME:'user',NEXTCLOUD_APP_PASSWORD:'app-password-private',NEXTCLOUD_ROOT:'PAC'};
@@ -50,4 +51,35 @@ test('invalid dates and reversed periods are rejected; missing existing trip is 
 test('completed setup uses entered trip details on the login page and calendar',async()=>{
  const f=fixture();assert.equal((await f.submit()).status,200);f.restart();const page=await f.call('/');assert.match(await page.text(),/Herbstreise/);
  const login=await f.call('/__login',{method:'POST',body:new URLSearchParams({password:input.PORTAL_PASSWORD})});const cookie=login.headers.get('set-cookie').split(';')[0];const calendar=await (await f.call('/data/calendar.json',{headers:{cookie}})).json();assert.equal(calendar.days.length,3);assert.deepEqual(calendar.events,[]);
+});
+
+test('setup prefills the installer title as plain text and removes the link fragment',()=>{
+ for(const title of ['Köln & München 2027','<img src=x onerror=alert(1)>','']){
+  const elements={TRIP_START:{addEventListener(){}},TRIP_END:{addEventListener(){}},TRIP_MODE:{value:'new',addEventListener(){}},TRIP_TITLE:{value:''},TRIP_TIMEZONE:{value:''}};
+  const button={},form={elements,querySelector:()=>button,querySelectorAll:()=>[],addEventListener(){}},fields={},message={};
+  let cleaned;
+  runInNewContext(setupScript,{document:{querySelector:selector=>({'form':form,'#message':message,'#trip-fields':fields}[selector])},URLSearchParams,Intl,location:{hash:'#'+new URLSearchParams({token:'test-token',title})},history:{replaceState:(_state,_unused,path)=>{cleaned=path;}}});
+  assert.equal(elements.TRIP_TITLE.value,title);
+  assert.equal(cleaned,'/setup');
+  assert.notEqual(button.disabled,true);
+ }
+});
+
+test('setup accepts six-character passwords and rejects shorter or matching passwords',()=>{
+ const shorter={...input,PORTAL_PASSWORD:'reise1',confirmPortal:'reise1',ADMIN_PASSWORD:'admin1',confirmAdmin:'admin1'};
+ assert.equal(validateSetup(shorter).PORTAL_PASSWORD,'reise1');
+ assert.throws(()=>validateSetup({...shorter,PORTAL_PASSWORD:'kurz',confirmPortal:'kurz'}),/mindestens 6/);
+ assert.throws(()=>validateSetup({...shorter,ADMIN_PASSWORD:'reise1',confirmAdmin:'reise1'}),/unterschiedliche/);
+});
+test('setup date range follows the start and passwords can be shown and hidden',()=>{
+ const control=(value='')=>({value,handlers:{},addEventListener(event,fn){this.handlers[event]=fn;}});
+ const start=control(),end=control(),password={type:'password',dataset:{label:'Portalpasswort'}},toggle={...control(),dataset:{password:'PORTAL_PASSWORD'},setAttribute(key,value){this[key]=value;}};
+ const elements={TRIP_START:start,TRIP_END:end,TRIP_MODE:control('new'),TRIP_TITLE:control(),TRIP_TIMEZONE:control(),PORTAL_PASSWORD:password};
+ const form={elements,querySelector:()=>({}),querySelectorAll:()=>[toggle],addEventListener(){}};
+ runInNewContext(setupScript,{document:{querySelector:selector=>selector==='form'?form:{}},URLSearchParams,Intl,location:{hash:'#token=test'},history:{replaceState(){}}});
+ start.value='2027-05-10';start.handlers.change();assert.equal(end.value,start.value);assert.equal(end.min,start.value);
+ end.value='2027-05-15';start.handlers.change();assert.equal(end.value,'2027-05-15');
+ start.value='2027-05-20';start.handlers.change();assert.equal(end.value,start.value);
+ toggle.handlers.click();assert.equal(password.type,'text');assert.equal(toggle['aria-pressed'],'true');
+ toggle.handlers.click();assert.equal(password.type,'password');assert.equal(toggle['aria-pressed'],'false');
 });

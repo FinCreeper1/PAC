@@ -4,3 +4,5 @@ select{display:block;width:100%;margin:10px 0 20px;padding:10px;border:1px solid
 #pacs-list{list-style:none;padding:0;margin:16px 0}#pacs-list li{border-top:1px solid var(--line);padding:16px 0;overflow-wrap:anywhere}.pac-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:14px}#pacs-status{font-size:14px;color:var(--muted)}
 
 #trip-name{display:block;box-sizing:border-box;width:100%;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:4px;font:inherit;background:var(--surface);color:var(--ink)}
+
+.result-next{border-top:1px solid var(--line);padding-top:18px;margin-top:24px}.result-next .button{margin:0 0 8px}#result-view details p{margin:16px 0 0;font-size:14px}#result-view #forget{margin-top:0}

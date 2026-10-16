@@ -11,55 +11,99 @@
     <script src="/shared/calendar-view.js" defer></script>
     <script src="/admin/admin.js" defer></script>
     <script src="/admin/route-editor.js" defer></script>
+    <script src="/admin/journey-editor.js" defer></script>
   </head>
   <body data-view="list">
     <header>
-      <h1>Reiseplan bearbeiten</h1>
-      <a href="/" target="_blank" rel="noopener">Reiseplan öffnen ↗</a
-      ><button id="logout">Abmelden</button>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">✎</span><div><h1>Reiseplan bearbeiten</h1><p>Verwaltung für die Reiseleitung</p></div></div>
+      <a class="header-link" href="/" target="_blank" rel="noopener">So sehen es die Teilnehmenden ↗</a
+      ><button id="logout" class="ghost">Abmelden</button>
     </header>
     <main>
+      <nav class="view-switch area-tabs" aria-label="Verwaltungsbereiche">
+        <button type="button" id="tab-calendar" aria-pressed="true" aria-controls="calendar-panel"><span aria-hidden="true">📅</span> Reiseplan <small>Termine ansehen und ändern</small></button>
+        <button type="button" id="tab-invoices" aria-pressed="false" aria-controls="invoices-panel"><span aria-hidden="true">🧾</span> Rechnungen <small>Belege sicher ablegen</small></button>
+        <button type="button" id="tab-settings" aria-pressed="false" aria-controls="settings-panel"><span aria-hidden="true">⚙️</span> Einstellungen <small>Karten und Anzeige</small></button>
+      </nav>
+      <section id="invoices-panel" class="panel-card" aria-label="Rechnungen und Belege" hidden>
+        <h2>Rechnungen und Belege</h2>
+        <p>Hier legst du Quittungen, Rechnungen und andere Belege ab. Nur die Reiseleitung sieht diese Dateien – Teilnehmende haben keinen Zugriff.</p>
+        <form id="invoice-upload" class="upload-box">
+          <label>1. Datei auswählen <small>(PDF, Foto oder Dokument, höchstens 25 MB)</small><input type="file" id="invoice-file" required /></label>
+          <button type="submit">2. Hochladen</button>
+        </form>
+        <p id="invoice-status" role="status" aria-live="polite"></p>
+        <h3>Bereits abgelegt</h3>
+        <ul id="invoice-list" class="file-list"></ul>
+      </section>
+      <section id="settings-panel" class="panel-card" aria-label="Einstellungen" hidden>
+        <h2>Einstellungen</h2>
+        <form id="map-settings-form">
+          <fieldset id="map-settings-fields" disabled>
+            <legend>Welche Karte soll angezeigt werden?</legend>
+            <label>Kartenanbieter<select name="mapProvider">
+              <option value="openstreetmap">OpenStreetMap (empfohlen, funktioniert sofort)</option>
+              <option value="mapkit">Apple Karten (nur mit eingerichtetem Schlüssel)</option>
+            </select></label>
+            <p class="hint">Die Auswahl gilt für alle Karten im Reiseplan und hier in der Verwaltung. Im Zweifel einfach OpenStreetMap lassen. Apple Karten funktionieren nur, wenn APPLE_MAPS_TOKEN in den Cloudflare-Einstellungen hinterlegt ist.</p>
+            <button type="submit">Einstellungen speichern</button>
+          </fieldset>
+          <p id="map-settings-status" role="status" aria-live="polite">Einstellungen werden beim Öffnen geladen.</p>
+        </form>
+      </section>
+      <section id="calendar-panel" aria-label="Reiseplan bearbeiten">
       <div class="toolbar">
         <div class="save-summary">
           <strong id="save-state" role="status">Kalender wird geladen …</strong>
-          <span>Speichern macht deine Änderungen für alle Teilnehmenden sichtbar.</span>
+          <span>Erst nach dem Speichern sehen alle Teilnehmenden deine Änderungen.</span>
         </div>
-        <button type="button" id="new-event" disabled>Neuer Termin</button
-        ><button id="undo" disabled>Letzte Änderung zurücknehmen</button
-        ><button id="save" disabled>Änderungen speichern</button>
+        <div class="toolbar-actions">
+          <button id="undo" class="ghost" disabled>↶ Rückgängig</button
+          ><button id="save" disabled>Änderungen speichern</button>
+        </div>
+      </div>
+      <div class="create-row" role="group" aria-label="Etwas hinzufügen">
+        <span class="create-label">Hinzufügen:</span>
+        <button type="button" id="new-event" class="create" disabled>＋ Neuer Termin</button
+        ><button type="button" id="new-journey" class="create" disabled>🚆 Neue Zugreise</button
+        ><button type="button" id="new-journey-from-link" class="create" disabled>🔗 Bahn-Link einfügen</button>
       </div>
       <p id="status" role="status" aria-live="polite">
         Kalender wird geladen …
       </p>
-      <details class="form-section" id="countdown-settings">
-        <summary>Countdown und Abgabefrist</summary>
+      <details class="quick-help guide-card" open><summary>So bearbeitest du den Reiseplan – in 3 Schritten</summary><ol class="steps"><li><b>Termin wählen</b>Tag auswählen und auf einen Termin klicken – oder oben „Neuer Termin“.</li><li><b>Angaben ändern</b>Im Formular Name, Zeit und Ort anpassen.</li><li><b>Speichern</b>„Speichern – für alle sichtbar“ klicken. Erst dann sehen es alle.</li></ol><p>Tipp: Im Wochenplan kannst du Termine mit der Maus verschieben. Diese Änderungen speicherst du danach oben mit „Änderungen speichern“. Ein Fehler? „Rückgängig“ hilft.</p></details>
+      <details class="form-section settings-card" id="countdown-settings">
+        <summary>⏱ Countdown und Abgabefrist <small>freiwillig</small></summary>
         <form id="countdown-form">
           <fieldset id="countdown-fields" disabled>
-            <label><input type="checkbox" name="enabled" checked /> Countdown im Reiseplan anzeigen</label>
-            <label><input type="checkbox" name="deadlineEnabled" /> Vorübergehende Abgabefrist anzeigen</label>
-            <label>Titel<input name="deadlineTitle" maxlength="200" placeholder="Zum Beispiel: Reiseunterlagen abgeben" /></label>
-            <label>Abgabe bis<input type="datetime-local" name="deadlineAt" /></label>
-            <label>Warnung ab wie vielen Minuten vor Abgabe?<input type="number" name="warningMinutes" min="0" max="10080" value="60" /></label>
-            <label>Abgabefrist wieder ausblenden ab<input type="datetime-local" name="deadlineHideAt" /></label>
-            <p>Uhrzeiten gelten in deiner Gerätezeitzone. Bis zum Ausblenden ersetzt die Abgabefrist den nächsten Kalendertermin. Nach Ablauf wird eine Warnung angezeigt. Anschließend erscheint wieder der nächste Termin.</p>
+            <p class="hint">Oben im Reiseplan sehen Teilnehmende einen Countdown bis zum nächsten Termin. Du kannst dort vorübergehend auch eine Frist anzeigen, z. B. „Unterlagen abgeben bis Freitag“.</p>
+            <label class="check"><input type="checkbox" name="enabled" checked /> Countdown im Reiseplan anzeigen</label>
+            <label class="check"><input type="checkbox" name="deadlineEnabled" /> Abgabefrist anzeigen</label>
+            <label>Was soll abgegeben werden?<input name="deadlineTitle" maxlength="200" placeholder="Zum Beispiel: Reiseunterlagen abgeben" /></label>
+            <div class="pair">
+              <label>Abgabe bis<input type="datetime-local" name="deadlineAt" /></label>
+              <label>Frist ausblenden ab<input type="datetime-local" name="deadlineHideAt" /></label>
+            </div>
+            <label>Wie viele Minuten vorher warnen?<input type="number" name="warningMinutes" min="0" max="10080" value="60" /></label>
+            <p class="hint">Nach Ablauf erscheint eine Warnung, ab dem Ausblende-Zeitpunkt wieder der nächste Termin. Danach oben „Änderungen speichern“ nicht vergessen.</p>
             <button type="submit">In Änderungen übernehmen</button>
           </fieldset>
         </form>
       </details>
       <div class="view-toolbar" aria-label="Kalenderansicht">
-        <div class="view-switch" role="group" aria-label="Ansicht wählen">
-          <button id="view-list" type="button" aria-pressed="true">Einzelne Tage</button>
-          <button id="view-week" type="button" aria-pressed="false">Ganze Woche</button>
+        <span class="create-label">Ansicht:</span>
+        <div class="view-switch segmented" role="group" aria-label="Ansicht wählen">
+          <button id="view-list" type="button" aria-pressed="true">Tagesliste</button>
+          <button id="view-week" type="button" aria-pressed="false">Wochenplan</button>
         </div>
-        <details class="quick-help"><summary>Wie funktioniert das?</summary><ol><li>Wähle einen Tag und klicke auf einen Termin.</li><li>Ändere die Angaben oder lege einen neuen Termin an.</li><li>Klicke auf „Speichern – für alle sichtbar“.</li></ol><p>Verschobene oder gelöschte Termine speicherst du mit „Änderungen speichern“ oben auf der Seite.</p></details>
       </div>
       <div class="workspace">
         <section class="mobile-schedule" aria-label="Termine nach Tag">
           <h2>Termine</h2><label for="agenda-day">Welchen Tag möchtest du bearbeiten?</label
           ><div class="day-navigation"><button id="previous-day" type="button" aria-label="Vorheriger Tag" disabled>←</button><select id="agenda-day"></select><button id="next-day" type="button" aria-label="Nächster Tag" disabled>→</button></div>
-          <label for="event-search">Termine an diesem Tag suchen</label>
-          <input id="event-search" type="search" placeholder="Titel, Ort oder Verantwortliche" />
-          <button id="clear-search" type="button" hidden>Suche löschen</button><p id="agenda-count" role="status"></p>
+          <label for="event-search">Termin suchen</label>
+          <input id="event-search" type="search" placeholder="🔍 Titel, Ort oder Ansprechperson" />
+          <button id="clear-search" type="button" class="ghost" hidden>Suche löschen</button><p id="agenda-count" role="status"></p>
           <div id="agenda"></div>
         </section>
         <section class="schedule" aria-label="Wochenraster">
@@ -82,6 +126,26 @@
               <option value="event">Treffpunkt, Aufstehen oder Organisatorisches</option>
               <option value="free">Freizeit</option>
             </select></label>
+            <details class="form-section" id="journey-section">
+              <summary>Zugverbindung hinzufügen oder bearbeiten</summary>
+              <label><input type="checkbox" name="isJourney" /> Dieser Termin ist eine Zugreise</label>
+              <p>Lange Bahn-Links liefern Start, Ziel und Abfahrt. Bei kurzen vbid-Links ergänze diese Angaben unten. Transitous sucht passende Verbindungen; wähle anschließend deine Fahrt aus.</p>
+              <label>Link zur Verbindung (freiwillig)<input name="journeyUrl" type="url" placeholder="https://www.bahn.de/…" /></label>
+              <div class="pair">
+                <label>Startbahnhof (falls im Link fehlt)<input name="journeyOrigin" maxlength="200" placeholder="Hamburg-Altona" /></label>
+                <label>Zielbahnhof (falls im Link fehlt)<input name="journeyDestination" maxlength="200" placeholder="Aachen Hbf" /></label>
+              </div>
+              <div class="pair">
+                <label>Reisetag (falls im Link fehlt)<input name="journeyDate" type="date" /></label>
+                <label>Abfahrt (falls im Link fehlt)<input name="journeyTime" type="time" /></label>
+              </div>
+              <button type="button" id="import-journey">Mit Transitous suchen</button>
+              <p>Fahrplandaten: <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous und Datenquellen</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a></p>
+              <p id="journey-import-status" role="status" aria-live="polite"></p>
+              <div id="journey-options"></div>
+              <div id="journey-legs"></div>
+              <button type="button" id="add-leg">Zugabschnitt hinzufügen</button>
+            </details>
             <h3>Wann findet es statt?</h3>
             <label>Tag<select name="day"></select></label>
             <label>Steht die Uhrzeit schon fest?<select name="timing">
@@ -168,6 +232,7 @@
           </form>
         </aside>
       </div>
+      </section>
     </main>
   </body>
 </html>

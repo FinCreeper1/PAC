@@ -177,6 +177,18 @@ globalThis.CalendarModel = (() => {
       ),
     );
   }
+  function validDate(value) {
+    return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
+  }
+  function extend(calendar, date) {
+    if (!validDate(date) || !calendar.days.length || !calendar.days.every(d=>validDate(d.isoDate))) throw Error("Bitte ein gültiges Reisedatum wählen.");
+    const result = structuredClone(calendar);
+    // Add the requested day only: a distant date must not create years of empty columns.
+    result.days = [...new Set(calendar.days.map(d=>d.isoDate).concat(date))].sort().map(isoDate=>({isoDate}));
+    const indices = new Map(result.days.map((day,index)=>[day.isoDate,index+1]));
+    for (const event of result.events) event.day = indices.get(calendar.days[event.day-1]?.isoDate);
+    return result;
+  }
   // Outer journey times belong to the event; only intermediate times live in journeys.json.
   function journey(item, details) {
     const result = structuredClone(details);
@@ -185,6 +197,8 @@ globalThis.CalendarModel = (() => {
     return result;
   }
   return {
+    extend,
+    validDate,
     journey,
     minutes,
     time,

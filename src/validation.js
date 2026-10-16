@@ -2,7 +2,11 @@ import '../public/shared/calendar-model.js';
 export function validateCalendar(calendar, seed, trip, journeys) {
   const fail=()=>{throw new Error('Bitte Datum, Titel, Ort, Zeiten, Status und Routen prüfen.');};
   const base=CalendarModel.normalize(seed,trip);
-  if(!calendar || calendar.schemaVersion!==2 || JSON.stringify(calendar.days)!==JSON.stringify(base.days) || JSON.stringify(calendar.timeSlots)!==JSON.stringify(base.timeSlots) || !Array.isArray(calendar.events) || calendar.events.length>200) fail();
+  if(!calendar || calendar.schemaVersion!==2 || !Array.isArray(calendar.days) || !calendar.days.length || calendar.days.length>10000 || JSON.stringify(calendar.timeSlots)!==JSON.stringify(base.timeSlots) || !Array.isArray(calendar.events) || calendar.events.length>200) fail();
+  const dates=calendar.days.map(day=>day?.isoDate);
+  if(!dates.every((date,i)=>CalendarModel.validDate(date) && (!i||date>dates[i-1])) || JSON.stringify(calendar.days)!==JSON.stringify(dates.map(isoDate=>({isoDate})))) fail();
+  const dateSet=new Set(dates);
+  if(!base.days.every(day=>dateSet.has(day.isoDate))) fail();
   if (calendar.countdown != null) {
     const settings=calendar.countdown;
     if(typeof settings !== 'object' || typeof settings.enabled !== 'boolean') fail();
@@ -26,9 +30,20 @@ export function validateCalendar(calendar, seed, trip, journeys) {
     if(event.showMap!=null&&typeof event.showMap!=='boolean') fail();
     coord(event.latitude,event.longitude);
     for(const key of ['start','end','time','style','action','topic','materialTopic','dialog','route']) if(key in event) fail();
+    if(event.journey) {
+      const j=event.journey;
+      if(event.journeyId!==event.id || event.type!=='travel' || event.timing!=='scheduled' || !Array.isArray(j.legs) || !j.legs.length || j.legs.length>20) fail();
+      for(const key of ['heading','dialog','statusId','buttonId','url']) if(typeof j[key]!=='string'||!j[key]||j[key].length>2000) fail();
+      try {if(!['https:','http:'].includes(new URL(j.url).protocol)) fail();} catch {fail();}
+      for(const leg of j.legs) {
+        for(const key of ['service','origin','destination','timeId','platformId','delayId']) if(typeof leg[key]!=='string'||!leg[key].trim()||leg[key].length>500) fail();
+        for(const key of ['number','station','arrivalStation','platform']) if(leg[key]!=null&&(typeof leg[key]!=='string'||leg[key].length>500)) fail();
+        if(CalendarModel.minutes(leg.departure)===null||CalendarModel.minutes(leg.arrival)===null) fail();
+      }
+    }
     if(event.journeyId) {
-      if(!Object.hasOwn(journeys,event.journeyId)) fail();
-      const legs=CalendarModel.journey(event,journeys[event.journeyId]).legs;
+      if(!event.journey && !Object.hasOwn(journeys,event.journeyId)) fail();
+      const legs=CalendarModel.journey(event,event.journey || journeys[event.journeyId]).legs;
       for(let i=0;i<legs.length;i++) if(CalendarModel.minutes(legs[i].arrival)<=CalendarModel.minutes(legs[i].departure)||(i&&CalendarModel.minutes(legs[i].departure)<CalendarModel.minutes(legs[i-1].arrival))) fail();
     }
     if(event.routeRef && (!/^[a-z0-9-]{1,80}$/.test(event.routeRef)||event.mapRoute)) fail();

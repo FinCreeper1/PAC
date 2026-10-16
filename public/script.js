@@ -642,6 +642,18 @@ function renderJourneys() {
     link.target = "_blank";
     link.rel = "noopener";
     dialog.append(link);
+    if (journey.source === "transitous") {
+      const attribution = createTextElement("a", "Fahrplandaten: Transitous und Datenquellen");
+      attribution.href = "https://transitous.org/sources/";
+      attribution.target = "_blank";
+      attribution.rel = "noopener";
+      dialog.append(attribution);
+      const osm = createTextElement("a", "© OpenStreetMap-Mitwirkende");
+      osm.href = "https://www.openstreetmap.org/copyright";
+      osm.target = "_blank";
+      osm.rel = "noopener";
+      dialog.append(osm);
+    }
     const extras = createTextElement("div", "");
     extras.className = "event-extras";
     dialog.append(extras);

@@ -86,6 +86,7 @@ function updateSaveState() {
   $("#save-state").textContent = saving ? "Wird gespeichert …" : editing || dirty
     ? "Noch nicht gespeichert"
     : "Alle Änderungen sind gespeichert";
+  $("#save-state").dataset.state = saving ? "saving" : editing || dirty ? "dirty" : "saved";
   $("#save").disabled = saving || sessionExpired || !(editing || dirty) || publicationBlocked;
   $("#save-event").disabled = saving || sessionExpired || !(editing || dirty) || publicationBlocked;
   $("#save-event").textContent = saving ? "Wird gespeichert …" : "Speichern – für alle sichtbar";
@@ -98,6 +99,8 @@ function controls() {
     (item) => item.id === selected,
   );
   $("#new-event").disabled = sessionExpired || !calendar || calendar.events.length >= 200;
+  $("#new-journey").disabled = $("#new-event").disabled;
+  $("#new-journey-from-link").disabled = $("#new-event").disabled;
   $("#save").disabled = saving || sessionExpired || !(dirty || editing) || publicationBlocked;
   $("#undo").disabled = sessionExpired || !history.length;
 }
@@ -130,6 +133,21 @@ $("#clear-search").onclick = () => {
   renderAgenda();
   $("#event-search").focus();
 };
+function refreshDayOptions() {
+  const selectedDay = Number(form.elements.day.value) || draft?.day || 1;
+  form.elements.day.replaceChildren();
+  $("#agenda-day").replaceChildren();
+  for (const [i, day] of calendar.days.entries()) {
+    const option = document.createElement("option");
+    option.value = i + 1;
+    option.textContent = CalendarModel.dayLabel(day);
+    form.elements.day.append(option);
+    $("#agenda-day").append(option.cloneNode(true));
+  }
+  agendaDay = Math.min(agendaDay, calendar.days.length);
+  form.elements.day.value = Math.min(selectedDay, calendar.days.length);
+  $("#agenda-day").value = agendaDay;
+}
 function changeDay(day) {
   if (!calendar || day < 1 || day > calendar.days.length) return;
   agendaDay = day;
@@ -271,6 +289,7 @@ function showDraft() {
     .map((p) => p.join(", "))
     .join("\n");
   points();
+  window.showJourneyDraft?.();
   mapLink();
   syncTimeFields();
   updateSaveState();
@@ -538,6 +557,7 @@ function applyDraft() {
     );
     return;
   }
+  if (!window.applyJourneyDraft()) return false;
   let geometry;
   try {
     geometry = $("#geometry").value.trim()
@@ -616,6 +636,7 @@ form.addEventListener("submit", async (event) => {
 $("#undo").onclick = () => {
   if (editing && !confirm("Deine Eingaben sind noch nicht gespeichert. Möchtest du sie verwerfen?")) return;
   calendar = history.pop();
+  refreshDayOptions();
   dirty = true;
   controls();
   render();
@@ -648,9 +669,11 @@ async function saveChanges() {
     const data = await r.json();
     if (!r.ok) throw Error(data.error);
     revision = data.revision;
+    if (data.trip) trip = data.trip;
     if (data.calendar) {
       for (const item of data.calendar.events) {
         const previous = calendar.events.find((e) => e.id === item.id);
+        if (previous?.journey) window.adminJourneys[item.journeyId] = structuredClone(previous.journey);
         if (item.routeRef && previous?.mapRoute)
           routeData.set(item.routeRef, structuredClone(previous.mapRoute));
       }
@@ -710,8 +733,10 @@ window.addEventListener("beforeunload", (e) => {
     const data = await r.json();
     if (!r.ok) throw Error(data.error);
     ({ revision, csrf, trip } = data);
+    window.PortalMaps?.setProvider(trip.mapProvider || "mapkit");
     publicationBlocked = Boolean(data.noteImportError);
     calendar = CalendarModel.normalize(data.calendar, trip);
+    window.adminJourneys = data.journeys || {};
     watchAdminSession();
     await Promise.all(
       [...new Set(calendar.events.map((e) => e.routeRef).filter(Boolean))].map(
@@ -725,13 +750,7 @@ window.addEventListener("beforeunload", (e) => {
         },
       ),
     );
-    for (const [i, d] of calendar.days.entries()) {
-      const o = document.createElement("option");
-      o.value = i + 1;
-      o.textContent = CalendarModel.dayLabel(d);
-      form.elements.day.append(o);
-      $("#agenda-day").append(o.cloneNode(true));
-    }
+    refreshDayOptions();
     const today = CalendarModel.current(calendar).dayIndex;
     if (today >= 0) agendaDay = today + 1;
     $("#agenda-day").value = agendaDay;
@@ -784,3 +803,101 @@ $("#countdown-form").onsubmit = event => {
   controls();
   message("Countdown-Einstellungen übernommen. Bitte oben Änderungen speichern.");
 };
+
+
+// Settings are saved independently, preserving any unsaved calendar draft.
+let mapSettingsRevision;
+async function loadMapSettings() {
+  const status = $("#map-settings-status");
+  $("#map-settings-fields").disabled = true;
+  try {
+    const response = await adminFetch("/api/admin/settings", {cache: "no-store"});
+    const data = await response.json();
+    if (!response.ok) throw Error(data.error);
+    csrf = data.csrf;
+    mapSettingsRevision = data.revision;
+    $("#map-settings-form").elements.mapProvider.value = data.mapProvider;
+    status.textContent = data.appleMapsConfigured ? "Apple MapKit und OpenStreetMap sind verfügbar." : "OpenStreetMap ist verfügbar. Apple MapKit benötigt einen Token im eigenen Worker.";
+    $("#map-settings-fields").disabled = false;
+  } catch (error) { status.textContent = error.message; }
+}
+for (const name of ["calendar", "settings", "invoices"]) {
+  $("#tab-" + name).addEventListener("click", () => {
+    for (const panel of ["calendar", "settings", "invoices"]) {
+      $("#" + panel + "-panel").hidden = panel !== name;
+      $("#tab-" + panel).setAttribute("aria-pressed", String(panel === name));
+    }
+    if (name === "settings") loadMapSettings();
+    if (name === "invoices") loadInvoices();
+  });
+}
+$("#map-settings-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const provider = event.currentTarget.elements.mapProvider.value;
+  $("#map-settings-fields").disabled = true;
+  $("#map-settings-status").textContent = "Wird gespeichert …";
+  try {
+    const response = await adminFetch("/api/admin/settings", {
+      method: "PUT", headers: {"content-type": "application/json", "x-csrf-token": csrf},
+      body: JSON.stringify({mapProvider: provider, revision: mapSettingsRevision}),
+    });
+    const data = await response.json();
+    if (!response.ok) throw Error(data.error);
+    mapSettingsRevision = data.revision;
+    if (trip) trip.mapProvider = data.mapProvider;
+    window.PortalMaps?.setProvider(data.mapProvider);
+    $("#map-settings-status").textContent = "Kartenanbieter gespeichert. Bereits geöffnete Karten erneut öffnen; Teilnehmende laden den Reiseplan neu.";
+  } catch (error) { $("#map-settings-status").textContent = error.message; }
+  finally { $("#map-settings-fields").disabled = sessionExpired; }
+});
+
+let invoiceCsrf;
+async function loadInvoices() {
+  const status = $("#invoice-status");
+  status.textContent = "Dateien werden geladen …";
+  try {
+    const response = await adminFetch("/api/admin/invoices", {cache: "no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    invoiceCsrf = data.csrf;
+    $("#invoice-list").replaceChildren();
+    for (const file of data.files) {
+      const row = document.createElement("li"), link = document.createElement("a"), remove = document.createElement("button");
+      link.href = "/api/admin/invoices/" + file.id;
+      link.textContent = file.name + " (" + Math.ceil(file.size / 1024) + " KB)";
+      link.download = file.name;
+      remove.type = "button"; remove.textContent = "Löschen";
+      remove.addEventListener("click", async () => {
+        if (!confirm('„' + file.name + '“ endgültig löschen?')) return;
+        remove.disabled = true;
+        try {
+          const response = await adminFetch(link.href, {method: "DELETE", headers: {"X-CSRF-Token": invoiceCsrf, "X-Confirm-Delete": "yes"}});
+          if (!response.ok) throw new Error((await response.json()).error);
+          await loadInvoices();
+        } catch (error) { status.textContent = error.message; remove.disabled = false; }
+      });
+      link.className = "file-name"; remove.className = "danger"; row.append(link, remove); $("#invoice-list").append(row);
+    }
+    status.textContent = data.files.length ? "" : "Noch keine Rechnungen oder Belege hochgeladen.";
+  } catch (error) { status.textContent = error.message; }
+}
+$("#invoice-upload").addEventListener("submit", async event => {
+  event.preventDefault();
+  const file = $("#invoice-file").files[0], button = event.currentTarget.querySelector("button");
+  if (!file || !invoiceCsrf) return;
+  if (!file.size || file.size > 25 * 1024 * 1024) { $("#invoice-status").textContent = "Bitte eine Datei mit höchstens 25 MB wählen."; return; }
+  button.disabled = true; $("#invoice-status").textContent = "Wird hochgeladen …";
+  try {
+    const name = btoa(String.fromCharCode(...new TextEncoder().encode(file.name)));
+    const response = await adminFetch("/api/admin/invoices", {method: "PUT", headers: {"X-CSRF-Token": invoiceCsrf, "X-File-Name": name}, body: file});
+    if (!response.ok) throw new Error((await response.json()).error);
+    $("#invoice-upload").reset(); await loadInvoices();
+  } catch (error) { $("#invoice-status").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+{
+  const guide = $(".guide-card");
+  try { if (localStorage.getItem("admin-guide-closed") === "1") guide.open = false; } catch {}
+  guide.addEventListener("toggle", () => { try { localStorage.setItem("admin-guide-closed", guide.open ? "0" : "1"); } catch {} });
+}

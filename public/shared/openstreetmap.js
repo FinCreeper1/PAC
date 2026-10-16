@@ -25,6 +25,8 @@ window.PortalMaps = (() => {
     const map = L.map(container).setView([points[0].latitude, points[0].longitude], 14);
     container._osmMap = map;
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // OSM requires a Referer; send only the origin, never private paths or queries.
+      referrerPolicy: 'origin',
       maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     const layers = points.map(point => {
@@ -34,5 +36,5 @@ window.PortalMaps = (() => {
     if (geometry?.length > 1) layers.push(L.polyline(geometry, {color: '#c81d25', weight: 4}).addTo(map));
     if (layers.length > 1) map.fitBounds(L.featureGroup(layers).getBounds(), {padding: [32, 32]});
   }
-  return {isOSM, render};
+  return {isOSM, render, setProvider(mapProvider) { settings = Promise.resolve({mapProvider}); }};
 })();

@@ -111,6 +111,12 @@ test('named deployment checks collisions before starting and allows another name
  f.env.requestApi=async()=>{throw {status:404};};
  assert.equal((await f.call('start',{csrf:f.csrf,accountId,tripName:'Berlin 2027'})).status,200);
  assert.equal(f.storage.data.get('job').scriptName,'pac-berlin-2027');
+ f.env.deployPac=async secret=>'https://'+secret.scriptName+'.test.workers.dev';
+ await f.job.alarm();
+ const ready=(await f.call('status')).data;
+ const params=new URLSearchParams(new URL(ready.setupUrl).hash.slice(1));
+ assert.equal(params.get('title'),'Berlin 2027');
+ assert.equal(params.get('token'),f.storage.data.get('job').setupToken);
 });
 
 test('switching account forgets tokens, account grants and pending login before a fresh session',async()=>{
@@ -130,4 +136,29 @@ test('global login limit allows 300 attempts across IPs and resets in the next h
  assert.equal((await attempt('another-ip')).status,429);
  storage.data.set('global',{window:Math.floor(Date.now()/3600000)-1,count:300});
  assert.equal((await attempt('another-ip')).status,200);
+});
+
+test('prefixed installer isolates cookies, uses the public OAuth callback and checks its origin',async()=>{
+ const f=fixture(),upstream='https://pac-install.linusleupold.workers.dev/install';
+ const session=await route(new Request(upstream+'/api/session'),f.env);
+ const cookie=session.headers.get('set-cookie');
+ assert.match(cookie,/^__Secure-pac-install-path=/);assert.match(cookie,/Path=\/install; Secure; HttpOnly; SameSite=Lax/);
+ const {csrf}=await session.json();
+ const login=await route(new Request(upstream+'/api/login',{method:'POST',headers:{cookie,origin:'https://profilfahrt.linusfin.de','content-type':'application/json'},body:JSON.stringify({csrf})}),f.env);
+ assert.equal(login.status,200);
+ assert.equal(new URL((await login.json()).url).searchParams.get('redirect_uri'),'https://profilfahrt.linusfin.de/install/oauth/callback');
+ const bad=await route(new Request(upstream+'/api/login',{method:'POST',headers:{cookie,origin:'https://evil.test','content-type':'application/json'},body:JSON.stringify({csrf})}),f.env);assert.equal(bad.status,403);
+ const callback=await route(new Request(upstream+'/oauth/callback?error=access_denied',{headers:{cookie}}),f.env);
+ assert.equal(callback.headers.get('location'),'/install/?login=invalid');
+});
+test('prefixed assets keep requests inside install while original assets stay unchanged',async()=>{
+ const env={ASSETS:{fetch:async request=>{assert.equal(new URL(request.url).pathname,'/');return new Response('<link href="/style.css"><script src="/app.js"></script>',{headers:{'content-type':'text/html'}});}}};
+ const prefixed=await route(new Request('https://worker.test/install/'),env);assert.match(await prefixed.text(),/href="\/install\/style.css"/);
+ const original=await route(new Request('https://worker.test/'),env);assert.match(await original.text(),/href="\/style.css"/);
+ const redirect=await route(new Request('https://worker.test/install'),env);assert.equal(redirect.status,308);assert.equal(redirect.headers.get('location'),'/install/');
+});
+test('asset canonical redirects remain inside the installer prefix',async()=>{
+ const env={ASSETS:{fetch:async()=>new Response(null,{status:307,headers:{location:'/setup'}})}};
+ const response=await route(new Request('https://worker.test/install/setup.html'),env);
+ assert.equal(response.headers.get('location'),'/install/setup');
 });

@@ -52,7 +52,7 @@ export class InstallJob {
     job.accounts=accounts.filter(a=>/^[a-f0-9]{32}$/.test(a.id)&&typeof a.name==='string').map(a=>({id:a.id,name:a.name}));
     if(!job.accounts.length)throw new Error('no-accounts');
     await this.state.storage.put('secret',secret);job.stage='authorized';job.expiresAt=secret.expiresAt;await this.save(job);return json({ok:true});
-   }catch(error){return this.fail(job,error.message==='no-accounts'?'Es wurde kein zugängliches Cloudflare-Konto gefunden. Prüfe deine Kontomitgliedschaft und die freigegebenen Konten.':error.status===403?'Cloudflare hat den Kontozugriff abgelehnt. Erlaube Account Settings → Read und Workers → Admin und melde dich erneut an.':error.status===429?'Cloudflare begrenzt gerade die Anfragen. Warte kurz und melde dich erneut an.':'Die Cloudflare-Anmeldung konnte nicht abgeschlossen werden. Bitte erneut anmelden.');}
+   }catch(error){return this.fail(job,error.message==='no-accounts'?'Es wurde kein zugängliches Cloudflare-Konto gefunden. Prüfen Sie Ihre Kontomitgliedschaft und die freigegebenen Konten.':error.status===403?'Cloudflare hat den Kontozugriff abgelehnt. Erlauben Sie Account Settings → Read und Workers → Admin und melden Sie sich erneut an.':error.status===429?'Cloudflare begrenzt gerade die Anfragen. Warten Sie kurz und melden Sie sich erneut an.':'Die Cloudflare-Anmeldung konnte nicht abgeschlossen werden. Bitte erneut anmelden.');}
   }
   if(body.csrf!==job.csrf)return json({error:'Ungültige Sitzung.'},403);
   if(path==='/forget'){
@@ -85,6 +85,7 @@ export class InstallJob {
     catch(error){if(error.status!==404)return json({error:'Die gewünschte PAC-Adresse konnte nicht geprüft werden. Bitte erneut versuchen.'},502);}
    }
    job.setupToken=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
+   job.tripName=typeof body.tripName==='string'?body.tripName.trim():'';
    job.accountId=body.accountId;job.scriptName=scriptName;job.stage='uploading';
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    await this.save(job,Date.now()+100);return this.status(job);
@@ -92,7 +93,7 @@ export class InstallJob {
   return json({},404);
  });}
  async save(job,alarm=job.expiresAt){await this.state.storage.put('job',job);await this.state.storage.setAlarm(alarm);}
- status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,...(job.setupToken?{setupUrl:job.previewUrl+'/setup#token='+job.setupToken}:{}),dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.diagnostic?{diagnostic:job.diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
+ status(job){return json({stage:job.stage,expiresAt:job.expiresAt,...(job.stage==='authorized'?{accounts:job.accounts}:{}),...(job.stage==='ready'?{previewUrl:job.previewUrl,...(job.setupToken?{setupUrl:job.previewUrl+'/setup#'+new URLSearchParams({token:job.setupToken,...(job.tripName?{title:job.tripName}:{})})}:{}),dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),...(job.stage==='failed'?{error:job.error,...(job.diagnostic?{diagnostic:job.diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{})}:{})});}
  async fail(job,error,diagnostic){await this.state.storage.deleteAll();await this.save({version:2,stage:'failed',csrf:job.csrf,error,...(diagnostic?{diagnostic}:{}),...(job.dashboardUrl?{dashboardUrl:job.dashboardUrl,scriptName:job.scriptName}:{}),expiresAt:Date.now()+600000});return json({ok:false});}
  async alarm(){
   const job=await this.state.storage.get('job');if(!job)return;
@@ -109,7 +110,7 @@ export class InstallJob {
    const diagnostic={stage,...(Number.isInteger(error.status)?{status:error.status}:{}),...(Number.isInteger(error.code)?{code:error.code}:{})};
    const detail='Schritt: '+(labels[stage]||'Bereitstellung')+(diagnostic.status?' · HTTP '+diagnostic.status:'')+(diagnostic.code?' · Cloudflare-Code '+diagnostic.code:'')+'. ';
    const advice=error.status===403&&stage==='subdomain'?'Cloudflare verweigert das Lesen der Konto-Subdomain. Diese API verlangt laut Dokumentation Workers Scripts Read oder Write; Workers → Admin allein deckt den Aufruf nicht ab. ':error.status===403&&stage==='upload'?'Zum Anlegen eines neuen Workers ist Workers → Admin erforderlich. Workers → Edit erlaubt nur Änderungen an bestehenden Workern. Bitte den OAuth-Client anpassen und erneut anmelden. ':error.status===403?'Cloudflare hat diesen API-Aufruf abgelehnt. Die erforderliche Berechtigung hängt vom angezeigten Schritt ab. ':error.status===401?'Die Cloudflare-Anmeldung ist abgelaufen. ':'';
-   await this.fail(job,detail+advice+'Bitte prüfe vor einem neuen Versuch den Worker '+job.scriptName+' in deinem Konto.',diagnostic);
+   await this.fail(job,detail+advice+'Bitte prüfen Sie vor einem neuen Versuch den Worker '+job.scriptName+' in Ihrem Konto.',diagnostic);
   }
  }
 }

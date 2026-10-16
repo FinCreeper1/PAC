@@ -1,3 +1,4 @@
+import {importJourney,SearchDetailsRequired} from './journey-import.js';
 import {openConfiguration,finishSetup,onboardingResponse} from './onboarding.js';
 import {missingSettings,setupResponse} from './setup.js';
 import { onRequest as authenticate, sign, safeEqual } from './legacy/_middleware.js';
@@ -107,15 +108,37 @@ export class Portal {
         await this.state.storage.put(`session:${session.id}`,{csrf:session.csrf,expires:Date.now()+7200000});
         const response=json({authenticated:true});response.headers.set('set-cookie',cookie('profilreise_admin',session.id,7200));return response;
       }
+      if(path==='/api/admin/invoices' || path.startsWith('/api/admin/invoices/')) return this.invoices(request,session);
+      if(path==='/api/admin/settings') {
+        const snapshot=structuredClone((await this.snapshot()).value);
+        const mapProvider=snapshot.trip.mapProvider || 'mapkit';
+        const revision=await this.revision({mapProvider});
+        const appleMapsConfigured=Boolean(env.APPLE_MAPS_TOKEN);
+        if(method==='GET')return json({mapProvider,revision,csrf:session.csrf,appleMapsConfigured});
+        if(method!=='PUT')return json({error:'Methode nicht erlaubt.'},405);
+        const text=await request.text();
+        if(text.length>2048)return json({error:'Einstellungen zu groß.'},413);
+        let body;try{body=JSON.parse(text);}catch{return json({error:'Ungültige Einstellungen.'},400);}
+        if(!body || !['mapkit','openstreetmap'].includes(body.mapProvider))return json({error:'Bitte einen gültigen Kartenanbieter wählen.'},400);
+        if(body.revision!==revision)return json({error:'Die Einstellungen wurden inzwischen geändert. Bitte neu laden.'},409);
+        if(body.mapProvider==='mapkit'&&!appleMapsConfigured)return json({error:'Für Apple MapKit zuerst APPLE_MAPS_TOKEN in den Cloudflare-Einstellungen des eigenen Workers hinterlegen.'},400);
+        snapshot.trip.mapProvider=body.mapProvider;
+        await this.saveSnapshot(snapshot);
+        return json({saved:true,mapProvider:body.mapProvider,revision:await this.revision({mapProvider:body.mapProvider}),appleMapsConfigured});
+      }
       if(path==='/api/admin/calendar') {
         const current=await this.calendar(), revision=await this.revision(current);
-        if(method==='GET') return json({calendar:current,revision,csrf:session.csrf,trip:(await this.snapshot()).value.trip,noteImportError:null});
+        if(method==='GET') return json({calendar:current,revision,csrf:session.csrf,trip:(await this.snapshot()).value.trip,journeys:(await this.snapshot()).value.journeys,noteImportError:null});
         if(method!=='PUT') return json({error:'Methode nicht erlaubt.'},405);
         const text=await request.text();if(new TextEncoder().encode(text).length>2000000) return json({error:'Kalender zu groß.'},413);
         let body;try {body=JSON.parse(text);const snapshot=(await this.snapshot()).value;validateCalendar(body.calendar,current,snapshot.trip,snapshot.journeys);} catch(error) {return json({error:error.message},400);}
         if(body.revision!==revision) return json({error:'Kalender wurde inzwischen geändert. Bitte neu laden.'},409);
         const calendar=body.calendar,snapshot=structuredClone((await this.snapshot()).value);
         for(const event of calendar.events) {
+          if(event.journey) {
+            snapshot.journeys[event.journeyId]=event.journey;
+            delete event.journey;
+          }
           if(event.mapRoute) {
             const ref='route-'+await this.revision(event.mapRoute);
             snapshot.routes[ref+'.json']=event.mapRoute;event.routeRef=ref;delete event.mapRoute;
@@ -127,8 +150,16 @@ export class Portal {
           }
         }
         delete calendar.publicationSource;calendar.publishedAt=new Date().toISOString();
+        snapshot.trip.startDate=calendar.days[0].isoDate;
+        snapshot.trip.endDate=calendar.days.at(-1).isoDate;
         snapshot.calendar=calendar;await this.saveSnapshot(snapshot);
-        return json({saved:true,calendar,revision:await this.revision(calendar)});
+        return json({saved:true,calendar,trip:snapshot.trip,revision:await this.revision(calendar)});
+      }
+      if(path==='/api/admin/journey-import' && method==='POST') {
+        const text=await request.text();
+        if(text.length>4096)return json({error:'Bahn-Link zu lang.'},413);
+        try {const body=JSON.parse(text);return json(await importJourney(body.url,fetch,body.search,(await this.snapshot()).value.trip.timeZone || 'Europe/Berlin'));}
+        catch(error){return json({error:error.name==='TimeoutError'?'Transitous antwortet gerade nicht. Bitte erneut versuchen.':error.message,requiresSearch:error instanceof SearchDetailsRequired},error instanceof SearchDetailsRequired?422:400);}
       }
       if(path==='/api/admin/place-search' && method==='GET') return this.placeSearch(url);
       if(path.startsWith('/api/')) return json({error:'Nicht gefunden.'},404);
@@ -215,6 +246,36 @@ export class Portal {
     if(!['GET','HEAD'].includes(method)) return json({error:'Methode nicht erlaubt.'},405);
     return this.asset(request,path==='/'?'/index.html':path);
   }
+  async invoices(request,session) {
+    const url=new URL(request.url),method=request.method;
+    const base='/api/admin/invoices',id=url.pathname===base?null:url.pathname.slice(base.length+1);
+    if(id && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))return json({error:'Ungültige Datei.'},400);
+    const prefix='_admin-invoices/';
+    if(!id && method==='GET') {
+      const page=await this.cloud.list({prefix});
+      return json({csrf:session.csrf,files:page.keys.map(item=>({id:item.name.slice(prefix.length),name:item.metadata.name,size:item.metadata.size,uploadedAt:item.metadata.uploadedAt}))});
+    }
+    if(!id && method==='PUT') {
+      const name=decodeHeader(request,'x-file-name'),raw=request.headers.get('content-length');
+      const size=raw!==null&&/^\d+$/.test(raw)?Number(raw):NaN;
+      if(!name||name.length>255||!request.body)return json({error:'Dateiname und Datei erforderlich.'},400);
+      if(!Number.isSafeInteger(size)||size<1||size>25*1024*1024)return json({error:'Bitte eine Datei mit höchstens 25 MB hochladen.'},413);
+      const id=crypto.randomUUID(),metadata={name:materials.safeFilename(name),type:'application/octet-stream',uploadedAt:new Date().toISOString()};
+      await this.cloud.putFile(prefix+id,request.body,metadata,size);
+      return json({saved:true,id},201);
+    }
+    if(id && method==='DELETE') {
+      if(request.headers.get('x-confirm-delete')!=='yes')return json({error:'Löschen bitte bestätigen.'},400);
+      await this.cloud.delete(prefix+id);return json({deleted:true});
+    }
+    if(id && ['GET','HEAD'].includes(method)) {
+      const file=await this.cloud.getWithMetadata(prefix+id,'stream');
+      if(!file.value)return json({error:'Datei nicht gefunden.'},404);
+      if(method==='HEAD')await file.value.cancel();
+      return new Response(method==='HEAD'?null:file.value,{headers:{'content-type':'application/octet-stream','content-disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(file.metadata.name),'cache-control':'private, no-store','x-content-type-options':'nosniff'}});
+    }
+    return json({error:'Methode nicht erlaubt.'},405);
+  }
   async sharedNote(request) {
     const method=request.method;
     if(!['GET','PUT'].includes(method)) return json({error:'Methode nicht erlaubt.'},405);
@@ -266,7 +327,7 @@ export default {
   async fetch(request,env) {
     const response=await env.PORTAL.get(env.PORTAL.idFromName('portal-v1')).fetch(request);
     const result=new Response(request.method==='HEAD'?null:response.body,response);
-    result.headers.set('x-content-type-options','nosniff');result.headers.set('x-frame-options','DENY');result.headers.set('referrer-policy','same-origin');
+    result.headers.set('x-content-type-options','nosniff');result.headers.set('x-frame-options','DENY');result.headers.set('referrer-policy','strict-origin-when-cross-origin');
     return result;
   }
 };

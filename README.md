@@ -6,6 +6,7 @@ Die direkte Cloudflare-Anmeldung wird derzeit freigeschaltet. Anschließend wäh
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FFinCreeper1%2FPAC)
 
+Öffentliche Vorlage: [FinCreeper1/PAC](https://github.com/FinCreeper1/PAC). Der Button startet die Einrichtung im eigenen Cloudflare-Konto.
 
 Portal und API laufen als JavaScript auf Cloudflare Workers. Dateien und Anwendungsdaten bleiben im vorhandenen Nextcloud-Speicher („Wolke“) und werden per WebDAV gelesen und geschrieben. PHP und Hetzner werden von dieser Variante nicht für die Ausführung benötigt.
 
@@ -133,7 +134,7 @@ npx wrangler dev --port 8791 --var PORTAL_PASSWORD:local-test --var ADMIN_PASSWO
 CONFIRM_ISOLATED_TEST_STORAGE=1 node scripts/check-local-http.mjs
 ```
 
-Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine Testdatei an, die anschließend gelöscht wird. Am 15.10.2026 wurde der Ablauf in der echten Worker-Runtime gegen einen eigenen Wolke-Testordner geprüft, einschließlich Anmeldung, Kalender, Notizen, Dateioperationen und Kalenderabo. Der Testordner wurde anschließend gelöscht und sein Fehlen geprüft.
+Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine Testdatei an, die anschließend gelöscht wird. Am 15.10.2026 wurde dieser Ablauf in der echten Worker-Runtime gegen einen eigens angelegten Wolke-Testordner geprüft: Teilnehmer-/Admin-Anmeldung, Kalender-Veröffentlichung, gemeinsame Notizen, Upload/Download/Löschung, Offline-Manifest und Kalenderabo. Der Testordner wurde anschließend gelöscht und sein Fehlen per HTTP 404 bestätigt. Bestehende Nutzerdaten wurden nicht verändert.
 
 ## Bestehende Instanz aktualisieren
 

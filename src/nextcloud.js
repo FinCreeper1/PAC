@@ -1,6 +1,6 @@
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 const encoder=new TextEncoder();
-const filePattern=/^([a-z0-9-]{1,64})\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const filePattern=/^(_admin-invoices|[a-z0-9-]{1,64})\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const textPattern=/^(?:(?:note|shared-note):[a-z0-9-]{1,64}|ideas:board|calendar:snapshot)$/;
 export class StorageConflict extends Error {}
 export class StorageUnavailable extends Error {constructor(status,reason='response'){super('Dateispeicher derzeit nicht erreichbar.');if(Number.isInteger(status))this.status=status;this.reason=reason;}}
@@ -159,7 +159,7 @@ export class NextcloudStorage {
     }
   }
   async list({prefix}={}) {
-    const match=/^([a-z0-9-]{1,64})\/$/.exec(prefix||'');if(!match) throw new Error('Ungültiger Speicherbereich.');
+    const match=/^(_admin-invoices|[a-z0-9-]{1,64})\/$/.exec(prefix||'');if(!match) throw new Error('Ungültiger Speicherbereich.');
     const parts=['metadata',match[1]],response=await this.request('PROPFIND',parts,'<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>',{depth:'1','content-type':'application/xml; charset=utf-8'});
     if(response.status===404) {await response.body?.cancel();return {keys:[],list_complete:true};}
     if(response.status!==207) {await response.body?.cancel();throw storageError();}

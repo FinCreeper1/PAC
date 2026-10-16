@@ -160,7 +160,82 @@ test('invalid Nextcloud configuration returns actionable setup response',async()
 test('deployed admin form retains same-origin referrers while rejecting foreign and null origins',async()=>{
  const {default:worker}=await import('../src/index.js');const fixture=setup();
  const env={PORTAL:{idFromName:x=>x,get:()=>({fetch:req=>fixture.call(new URL(req.url).pathname,{method:req.method,headers:req.headers,body:req.method==='POST'?req.body:undefined,...(req.method==='POST'?{duplex:'half'}:{})})})}};
- const page=await worker.fetch(new Request('https://portal.test/admin'),env);assert.equal(page.status,200);assert.equal(page.headers.get('referrer-policy'),'same-origin');assert.match(await page.text(),/action="\/admin\/login"/);
+ const page=await worker.fetch(new Request('https://portal.test/admin'),env);assert.equal(page.status,200);assert.equal(page.headers.get('referrer-policy'),'strict-origin-when-cross-origin');assert.match(await page.text(),/action="\/admin\/login"/);
  const submit=origin=>worker.fetch(new Request('https://portal.test/admin/login',{method:'POST',headers:{origin},body:new URLSearchParams({password:'admin-test'})}),env);
  assert.equal((await submit('https://portal.test')).status,303);assert.equal((await submit('https://other.test')).status,403);assert.equal((await submit('null')).status,403);
+});
+
+test('admin creates a train journey and publishes its details atomically',async()=>{
+ const {call}=setup(),cookie=await login(call,true);
+ const state=await (await call('/api/admin/calendar',{headers:{cookie}})).json();
+ const event=state.calendar.events[0];
+ event.type='travel';event.timing='scheduled';event.journeyId=event.id;
+ event.journey={heading:'Start → Ziel',url:'https://www.bahn.de/',dialog:event.id+'-journey',statusId:event.id+'-status',buttonId:event.id+'-refresh',legs:[{service:'ICE 123',origin:'Start',destination:'Ziel',departure:event.startTime,arrival:event.endTime,timeId:event.id+'-leg',platformId:event.id+'-platform',delayId:event.id+'-delay'}]};
+ const details=structuredClone(event.journey);
+ const publish=await call('/api/admin/calendar',{method:'PUT',headers:{cookie,'x-csrf-token':state.csrf},body:JSON.stringify({calendar:state.calendar,revision:state.revision})});
+ assert.equal(publish.status,200);
+ const saved=await publish.json();assert.equal(saved.calendar.events[0].journey,undefined);
+ const participant=await login(call);
+ assert.deepEqual((await (await call('/data/journeys.json',{headers:{cookie:participant}})).json())[event.id],details);
+ const invalid=structuredClone(state.calendar);invalid.events[0].journey.url='javascript:alert(1)';
+ assert.throws(()=>validateCalendar(invalid,seed,trip,journeys));
+ invalid.events[0].journey=details;invalid.events[0].journey.legs=[];
+ assert.throws(()=>validateCalendar(invalid,seed,trip,journeys));
+});
+
+test('publishing an extended range updates trip dates atomically and preserves existing event dates',async()=>{
+ const {call}=setup(),cookie=await login(call,true);
+ const state=await (await call('/api/admin/calendar',{headers:{cookie}})).json();
+ const first=state.calendar.days[0].isoDate;
+ const previous=new Date(Date.parse(first)-1460*86400000).toISOString().slice(0,10);
+ const originalDates=new Map(state.calendar.events.map(e=>[e.id,state.calendar.days[e.day-1].isoDate]));
+ const calendar=CalendarModel.extend(state.calendar,previous);
+ const response=await call('/api/admin/calendar',{method:'PUT',headers:{cookie,'x-csrf-token':state.csrf},body:JSON.stringify({calendar,revision:state.revision})});
+ assert.equal(response.status,200);
+ const saved=await response.json();assert.equal(saved.trip.startDate,previous);assert.equal(saved.calendar.days[0].isoDate,previous);
+ assert.equal(saved.calendar.days.length,state.calendar.days.length+1);
+ for(const event of saved.calendar.events)assert.equal(saved.calendar.days[event.day-1].isoDate,originalDates.get(event.id));
+ const participant=await login(call);
+ const persisted=await (await call('/data/trip.json',{headers:{cookie:participant}})).json();
+ assert.equal(persisted.startDate,previous);assert.equal(persisted.endDate,state.calendar.days.at(-1).isoDate);
+ const reloaded=await (await call('/api/admin/calendar',{headers:{cookie}})).json();
+ assert.equal(reloaded.trip.startDate,previous);assert.equal(reloaded.calendar.days[0].isoDate,previous);
+});
+
+test('map settings require admin and CSRF, persist without altering calendar, and reject stale writes',async()=>{
+ const {call,env}=setup();
+ assert.equal((await call('/api/admin/settings')).status,401);
+ const cookie=await login(call,true), headers={cookie};
+ const current=await (await call('/api/admin/settings',{headers})).json();
+ const before=await (await call('/api/admin/calendar',{headers})).json();
+ const put=(mapProvider,revision=current.revision,csrf=current.csrf)=>call('/api/admin/settings',{method:'PUT',headers:{cookie,'content-type':'application/json','x-csrf-token':csrf},body:JSON.stringify({mapProvider,revision})});
+ assert.equal((await put('openstreetmap',current.revision,'invalid')).status,403);
+ assert.equal((await put('invalid')).status,400);
+ assert.equal((await put('mapkit')).status,400);
+ const response=await put('openstreetmap');assert.equal(response.status,200);
+ const saved=await response.json();
+ assert.equal((await put('mapkit')).status,409);
+ const after=await (await call('/api/admin/calendar',{headers})).json();
+ assert.deepEqual(after.calendar,before.calendar);assert.equal(after.trip.mapProvider,'openstreetmap');
+ const participant=await login(call);
+ assert.equal((await (await call('/data/trip.json',{headers:{cookie:participant}})).json()).mapProvider,'openstreetmap');
+ env.APPLE_MAPS_TOKEN='configured-test-token';
+ assert.equal((await put('mapkit',saved.revision)).status,200);
+ assert.equal((await (await call('/api/admin/settings',{headers})).json()).mapProvider,'mapkit');
+});
+test('invoices require admin, CSRF and confirmed deletion and stay out of participant downloads',async()=>{
+ const {call}=setup(),participant=await login(call),cookie=await login(call,true);
+ for(const headers of [{},{cookie:participant}])assert.equal((await call('/api/admin/invoices',{headers})).status,401);
+ const {csrf}=await(await call('/api/admin/invoices',{headers:{cookie}})).json();
+ const options={method:'PUT',headers:{cookie,'x-file-name':btoa('Rechnung.txt'),'content-length':'7'},body:'invoice'};
+ assert.equal((await call('/api/admin/invoices',options)).status,403);options.headers['x-csrf-token']=csrf;
+ const uploaded=await call('/api/admin/invoices',options);assert.equal(uploaded.status,201,await uploaded.clone().text());
+ const {id}=await uploaded.json(),path='/api/admin/invoices/'+id;
+ assert.equal(await(await call(path,{headers:{cookie}})).text(),'invoice');
+ assert.equal((await call(path,{headers:{cookie:participant}})).status,401);
+ assert.equal((await(await call('/api/offline-manifest',{headers:{cookie:participant}})).json()).files.length,0);
+ assert.equal((await call('/api/files/_admin-invoices/'+id,{headers:{cookie:participant}})).status,404);
+ const headers={cookie,'x-csrf-token':csrf};assert.equal((await call(path,{method:'DELETE',headers})).status,400);
+ headers['x-confirm-delete']='yes';assert.equal((await call(path,{method:'DELETE',headers})).status,200);
+ assert.equal((await call(path,{headers:{cookie}})).status,404);
 });
