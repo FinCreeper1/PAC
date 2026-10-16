@@ -1,4 +1,4 @@
-import {api,deployPac,listPacs} from './cloudflare.js';
+import {api,deployPac,listPacs,pacName} from './cloudflare.js';
 import {beginLogin,exchangeCode} from './oauth.js';
 const json=(value,status=200)=>Response.json(value,{status,headers:{'cache-control':'no-store'}});
 const hour=3600000;
@@ -76,8 +76,16 @@ export class InstallJob {
   if(path==='/start'){
    if(job.stage==='uploading'||job.stage==='ready')return this.status(job);
    if(job.stage!=='authorized'||!job.accounts.some(a=>a.id===body.accountId))return json({error:'Bitte ein verbundenes Cloudflare-Konto auswählen.'},403);
+   let scriptName='pac-'+crypto.randomUUID().replaceAll('-','').slice(0,12);
+   if(body.tripName!==undefined){
+    try{scriptName=pacName(body.tripName);}catch(error){return json({error:error.message},400);}
+    const secret=await this.state.storage.get('secret');
+    if(!secret||secret.expiresAt<=Date.now())return json({error:'Bitte erneut bei Cloudflare anmelden.'},410);
+    try{await (this.env.requestApi||api)('/accounts/'+body.accountId+'/workers/scripts/'+scriptName+'/settings',{token:secret.apiToken,stage:'settings'});return json({error:'Diese PAC-Adresse ist bereits vergeben. Bitte den Reisenamen ergänzen, etwa um das Jahr.'},409);}
+    catch(error){if(error.status!==404)return json({error:'Die gewünschte PAC-Adresse konnte nicht geprüft werden. Bitte erneut versuchen.'},502);}
+   }
    job.setupToken=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
-   job.accountId=body.accountId;job.scriptName='pac-'+crypto.randomUUID().replaceAll('-','').slice(0,12);job.stage='uploading';
+   job.accountId=body.accountId;job.scriptName=scriptName;job.stage='uploading';
    job.dashboardUrl='https://dash.cloudflare.com/'+job.accountId+'/workers/services/view/'+job.scriptName+'/production/settings';
    await this.save(job,Date.now()+100);return this.status(job);
   }

@@ -22,7 +22,7 @@ $('#setup-form').addEventListener('submit',async event=>{
  event.preventDefault();if(busy)return;busy=true;$('#start').disabled=true;
  try{const {url}=await api('login',{});const target=new URL(url);if(target.origin!=='https://dash.cloudflare.com')throw new Error('Ungültige Anmeldung.');location.assign(target.href);}catch(e){error(e.message);$('#start').disabled=!configured;busy=false;}
 });
-$('#deploy-form').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{apply(await api('start',{accountId:$('#account').value}));}catch(e){error(e.message);}finally{busy=false;}});
+$('#deploy-form').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{apply(await api('start',{accountId:$('#account').value,tripName:$('#trip-name').value}));}catch(e){error(e.message);}finally{busy=false;}});
 async function forget(){try{await api('forget',{});location.reload();}catch(e){if(e.status===410||e.status===401){location.reload();return;}error(e.message);}}
 $('#forget').addEventListener('click',forget);$('#retry').addEventListener('click',forget);
 (async()=>{try{const session=await api('session');csrf=session.csrf;configured=session.configured;apply(await api('status'));if(new URL(location.href).searchParams.get('login')==='invalid'){error('Die Rückkehr von Cloudflare konnte keiner gültigen Anmeldung zugeordnet werden. Bitte erneut anmelden.');history.replaceState(null,'','/');}}catch(e){error(e.message);$('#retry').hidden=false;}})();
