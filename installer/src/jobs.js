@@ -10,7 +10,7 @@ export class InstallLimits {
   return this.state.blockConcurrencyWhile(async()=>{
    const now=Date.now(),window=Math.floor(now/hour),global=await this.state.storage.get('global')||{},ip=await this.state.storage.get('ip:'+key)||{};
    const total=global.window===window?global.count:0,own=ip.window===window?ip.count:0;
-   if(total>=20||own>=3)return json({error:'Zu viele Einrichtungen. Bitte später erneut versuchen.'},429);
+   if(total>=300||own>=30)return json({error:'Zu viele Anmeldeversuche. Bitte zur nächsten vollen Stunde erneut versuchen.'},429);
    await this.state.storage.put({'global':{window,count:total+1},['ip:'+key]:{window,count:own+1}});
    await this.state.storage.setAlarm((window+1)*hour+1000);return json({allowed:true});
   });
