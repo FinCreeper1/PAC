@@ -35,3 +35,15 @@ export async function deployPac(secret,payload,fetcher=fetch) {
  await api(prefix+'/scripts/'+name+'/subdomain',{method:'POST',token,body:{enabled:true,previews_enabled:false},fetcher,stage:'enable-subdomain'});
  return 'https://'+name+'.'+subdomain+'.workers.dev';
 }
+
+export async function listPacs(accountId,token,requestApi=api) {
+ if(!/^[a-f0-9]{32}$/.test(accountId||''))throw new ApiError(400,'account');
+ const prefix='/accounts/'+accountId+'/workers';
+ const scripts=await requestApi(prefix+'/scripts',{token,stage:'list-workers'});
+ if(!Array.isArray(scripts))throw new ApiError(502,'list-workers');
+ const matching=scripts.filter(script=>/^pac-[a-f0-9]{12}$/.test(script.id||''));
+ let subdomain;
+ if(matching.length){try{subdomain=(await requestApi(prefix+'/subdomain',{token,stage:'subdomain'}))?.subdomain;}catch(error){if(error.status!==404)throw error;}}
+ if(subdomain&&!/^[a-z0-9-]+$/.test(subdomain))throw new ApiError(502,'subdomain-response');
+ return matching.map(script=>({name:script.id,createdAt:typeof script.created_on==='string'?script.created_on:null,url:subdomain?'https://'+script.id+'.'+subdomain+'.workers.dev':null,dashboardUrl:'https://dash.cloudflare.com/'+accountId+'/workers/services/view/'+script.id+'/production/settings'})).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
