@@ -1,0 +1,94 @@
+:root { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --tone-087da8: #77cbe9;
+  --tone-123f43: #b9e5e8;
+  --tone-1497a3: #67c5ce;
+  --tone-171816: #f0f1ed;
+  --tone-2d6a4f: #99cfb1;
+  --tone-304b3a: #b1d1bb;
+  --tone-343930: #c1cbbb;
+  --tone-354039: #d0dfd3;
+  --tone-3c7176: #96c6ca;
+  --tone-465d51: #9cbeaa;
+  --tone-4b514d: #bec8c0;
+  --tone-4d554f: #c2cec5;
+  --tone-55594f: #b3b8ae;
+  --tone-555d57: #c1cdc3;
+  --tone-60635c: #b3b8ae;
+  --tone-626762: #b4beb4;
+  --tone-676a64: #b3b8ae;
+  --tone-6d4d7d: #bd9bce;
+  --tone-92958f: #b5bcb0;
+  --tone-9a610d: #e7bd7d;
+  --tone-9b2527: #f18b8d;
+  --tone-9b7b42: #d9b575;
+  --tone-a5151b: #f48b8f;
+  --tone-aeb3a8: #606a56;
+  --tone-b8dfe3: #3b6366;
+  --tone-c81d25: #f17479;
+  --tone-c9c0b2: #665f50;
+  --tone-c9d8ce: #4b6554;
+  --tone-d6cec0: #514b40;
+  --tone-d7d9d3: #4a5146;
+  --tone-d9dcd5: #41453e;
+  --tone-d9dcd6: #41453e;
+  --tone-dfe9e2: #344c3c;
+  --tone-e4e9e3: #354638;
+  --tone-e5e7e1: #343a33;
+  --tone-e8eeea: #26392e;
+  --tone-e9ece7: #3b4537;
+  --tone-e9f7f8: #20383b;
+  --tone-edf3ed: #25372a;
+  --tone-eee6f2: #352b3e;
+  --tone-eee9df: #302d26;
+  --tone-eef0ec: #333c30;
+  --tone-f0f2ec: #292f28;
+  --tone-f0f2ed: #30392b;
+  --tone-f1f3ef: #30392d;
+  --tone-f2eee5: #343026;
+  --tone-f3ecdf: #3b3223;
+  --tone-f5dfdf: #432a2c;
+  --tone-f5f6f3: #2b3029;
+  --tone-f7f7f2: #303128;
+  --tone-f8eded: #422b2c;
+  --tone-fafbf9: #20251f;
+  --tone-fbfcfa: #181b18;
+  --tone-ffffff: #232723;
+  --ink: #f0f1ed;
+  --muted: #b3b8ae;
+  --line: #41453e;
+  --paper: #181b18;
+  --white: #232723;
+  --rail: #f17479;
+  --moss: #9cbeaa;
+  --sand: #302d26;
+}
+.header-actions { display: flex; align-items: center; gap: 12px; }
+:root[data-theme="dark"] .site-header { background: #181b18; }
+:root[data-theme="dark"] .idea-form { background: #232723; border-color: #41453e; }
+:root[data-theme="dark"] .idea-row { border-color: #41453e; }
+:root[data-theme="dark"] .idea-join :is(input, select) { color: var(--ink); }
+@media (max-width: 500px) { .header-actions { gap: 8px; } .header-actions .header-date { display: none; } }
+ :root[data-theme="dark"] :is(input, select, textarea, dialog) { color: var(--ink); }
+:root[data-theme="dark"] :is(.delete-confirm, .idea-delete-actions button:last-child) { color: #181b18; }
+
+:root[data-theme="dark"] #invoices-panel { --line: #41453e; --paper: #181b18; --white: #232723; --ok: #99cfb1; --warn: #e7bd7d; }
+:root[data-theme="dark"] .update-card.current { border-left-color: #99cfb1; }
+
+:root[data-theme="dark"] #invoices-panel :is(.resource-icon, .drop-zone:hover, .drop-zone.dragging) { background: #432a2c; }
+:root[data-theme="dark"] #invoices-panel .paid-toggle { background: #3b3223; color: #e7bd7d; border-color: #665132; }
+:root[data-theme="dark"] #invoices-panel .paid-toggle[aria-pressed="true"] { background: #26392e; color: #99cfb1; border-color: #4b6554; }
+@media (max-width: 600px) { body > header { flex-wrap: wrap; gap: 12px; } }
+
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; touch-action: manipulation; transition: background-color .15s, color .15s; }
+.theme-toggle:hover:not(:disabled) { background: var(--line); color: var(--ink); }
+.theme-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.theme-toggle svg { display: block; flex: none; pointer-events: none; }
+.theme-toggle .theme-icon-sun { display: none; }
+[data-theme="dark"] .theme-toggle .theme-icon-moon { display: none; }
+[data-theme="dark"] .theme-toggle .theme-icon-sun { display: block; }
+@media (prefers-reduced-motion: reduce) { .theme-toggle { transition: none; } }
+
+[data-theme="dark"] .pac-credit { color: #d1d5db; background: rgba(24,27,24,.85); border-color: #41453e; }
+[data-theme="light"] .pac-credit { color: #4b5563; background: rgba(255,255,255,.85); border-color: #d9dcd6; }

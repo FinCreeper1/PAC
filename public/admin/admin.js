@@ -7,6 +7,7 @@ let calendar,
   selected,
   draft,
   history = [],
+  future = [],
   dirty = false,
   editing = false,
   draggedPoint = null,
@@ -82,14 +83,78 @@ function syncTimeFields() {
   form.elements.startTime.required = !open;
   form.elements.endTime.required = !open;
 }
+// Advance only on committed changes, so typing and opening existing drafts stay put.
+function advanceEditorTo(selector) {
+  const target = $(selector);
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "start", behavior: "auto" });
+}
+function advanceAfterTimeChange(name) {
+  if (!["day", "timing", "startTime", "endTime", "status"].includes(name)) return;
+  if (!form.elements.day.value) return;
+  if (form.elements.timing.value === "unscheduled") {
+    advanceEditorTo("#editor-place-heading");
+    return;
+  }
+  const { startTime, endTime } = form.elements;
+  if (!startTime.value || !endTime.value || !startTime.validity.valid ||
+      !endTime.validity.valid || minutes(endTime.value) <= minutes(startTime.value)) return;
+  advanceEditorTo(name === "status" ? "#editor-place-heading" : '#confirmation-label select');
+}
+form.addEventListener("change", (event) => advanceAfterTimeChange(event.target.name));
+let lastEditorState, restoringHistory = false;
+let publishedCalendar;
+function publicationSummary() {
+  if (!publishedCalendar || !calendar) return "";
+  const previous = new Map(publishedCalendar.events.map(item => [item.id, item]));
+  let added = 0, changed = 0;
+  for (const item of calendar.events) {
+    if (!previous.has(item.id)) added++;
+    else if (JSON.stringify(item) !== JSON.stringify(previous.get(item.id))) changed++;
+    previous.delete(item.id);
+  }
+  const parts = [];
+  if (added) parts.push(`${added} neu`);
+  if (changed) parts.push(`${changed} geändert`);
+  if (previous.size) parts.push(`${previous.size} gelöscht`);
+  if (JSON.stringify(calendar.countdown) !== JSON.stringify(publishedCalendar.countdown)) parts.push("Countdown geändert");
+  return parts.length ? "Gesamter Plan: " + parts.join(" · ") : "";
+}
+function historySnapshot() {
+  const fields = {};
+  for (const field of new Set(Object.values(form.elements))) {
+    if (field.name && field.type !== "file") fields[field.name] = {value: field.value, checked: field.checked};
+  }
+  const countdownFields = {};
+  for (const [name, field] of Object.entries($("#countdown-form").elements)) {
+    if (!/^\d+$/.test(name) && field && "value" in field) countdownFields[name] = {value: field.value, checked: field.checked};
+  }
+  return structuredClone({calendar, dirty, selected, draft, editing, fields, countdownFields,
+    journey: window.captureJourneyHistory?.()});
+}
+function trackEditorStep() {
+  if (!calendar || restoringHistory) return;
+  const next = historySnapshot();
+  const editor = state => JSON.stringify([state.selected, state.draft, state.fields, state.journey]);
+  if (lastEditorState && ((editing && editor(next) !== editor(lastEditorState)) ||
+      JSON.stringify(next.countdownFields) !== JSON.stringify(lastEditorState.countdownFields))) {
+    history.push(lastEditorState);
+    future = [];
+  }
+  lastEditorState = next;
+}
 function updateSaveState() {
-  $("#save-state").textContent = saving ? "Wird gespeichert …" : editing || dirty
-    ? "Noch nicht gespeichert"
-    : "Alle Änderungen sind gespeichert";
-  $("#save-state").dataset.state = saving ? "saving" : editing || dirty ? "dirty" : "saved";
+  trackEditorStep();
+  $("#publish-summary").textContent = publicationSummary();
+  $("#undo").disabled = saving || sessionExpired || !history.length;
+  $("#redo").disabled = saving || sessionExpired || !future.length;
+  $("#save-state").textContent = saving ? "Wird veröffentlicht …" : editing
+    ? "Termin noch nicht im Entwurf gespeichert"
+    : dirty ? "Entwurf noch nicht veröffentlicht"
+    : "Keine unveröffentlichten Änderungen";
   $("#save").disabled = saving || sessionExpired || !(editing || dirty) || publicationBlocked;
-  $("#save-event").disabled = saving || sessionExpired || !(editing || dirty) || publicationBlocked;
-  $("#save-event").textContent = saving ? "Wird gespeichert …" : "Speichern – für alle sichtbar";
+  $("#save-event").disabled = saving || sessionExpired || !editing;
+  $("#save-event").textContent = saving ? "Wird gespeichert …" : "Speichern";
   $("#cancel-event").textContent = editing ? "Abbrechen" : "Zurück zu den Terminen";
   $("#editor-empty").hidden = Boolean(draft);
 }
@@ -102,10 +167,11 @@ function controls() {
   $("#new-journey").disabled = $("#new-event").disabled;
   $("#new-journey-from-link").disabled = $("#new-event").disabled;
   $("#save").disabled = saving || sessionExpired || !(dirty || editing) || publicationBlocked;
-  $("#undo").disabled = sessionExpired || !history.length;
+  $("#undo").disabled = saving || sessionExpired || !history.length;
 }
 function checkpoint() {
-  history.push(structuredClone(calendar));
+  history.push(historySnapshot());
+  future = [];
   dirty = true;
   controls();
 }
@@ -180,6 +246,8 @@ function renderAgenda() {
   if (query && !count) $("#agenda").textContent = "Kein passender Termin. Versuche einen anderen Suchbegriff oder lösche die Suche.";
 }
 function render() {
+  // During undo/redo the view is rendered once after the whole state is restored.
+  if (restoringHistory) return;
   renderCountdownSettings();
   renderAgenda();
   CalendarView.week($("#calendar"), calendar, {
@@ -234,7 +302,7 @@ function render() {
           endTime: time(m + duration),
         });
         select(item.id, true);
-        message("Termin verschoben. Klicke oben auf „Änderungen speichern“, damit alle die neue Zeit sehen.");
+        message("Termin verschoben. Klicke oben auf „Änderungen veröffentlichen“, damit alle die neue Zeit sehen.");
       });
     },
   });
@@ -337,7 +405,7 @@ $("#new-event").onclick = () => {
   $("#editor-panel").scrollIntoView({ block: "start" });
   form.elements.title.focus({ preventScroll: true });
   message(
-    "Fülle den neuen Termin aus und klicke anschließend auf „Speichern – für alle sichtbar“.",
+    "Fülle den neuen Termin aus und klicke anschließend auf „Speichern“.",
   );
 };
 $("#cancel-event").onclick = () => {
@@ -356,7 +424,7 @@ $("#delete-event").onclick = () => {
     : "";
   if (
     !confirm(
-      `„${item.title}“ aus dem Plan löschen?${warning} Klicke danach auf „Änderungen speichern“, damit der Termin auch für alle anderen entfernt wird.`,
+      `„${item.title}“ aus dem Plan löschen?${warning} Klicke danach auf „Änderungen veröffentlichen“, damit der Termin auch für alle anderen entfernt wird.`,
     )
   )
     return;
@@ -369,10 +437,11 @@ $("#delete-event").onclick = () => {
   if (mobileLayout()) returnToAgenda();
   else $("#undo").focus();
   message(
-    "Termin zum Löschen vorgemerkt. Jetzt „Änderungen speichern“ oder „Letzte Änderung zurücknehmen“ wählen.",
+    "Termin zum Löschen vorgemerkt. Jetzt „Änderungen veröffentlichen“ oder „Letzte Änderung zurücknehmen“ wählen.",
   );
 };
 function mapLink() {
+  if (restoringHistory) return;
   window.updateAdminPlacePreview?.();
   $("#maps-link").hidden = !form.elements.latitude.value || !form.elements.longitude.value;
   $("#maps-link").href =
@@ -537,8 +606,10 @@ $("#add-point").onclick = () => {
 function applyDraft() {
   if (!draft) return false;
   for (const name of ["title", "location"]) form.elements[name].value = form.elements[name].value.trim();
-  if (!form.elements.latitude.value || !form.elements.longitude.value) {
-    editorError("Bitte wähle zuerst einen Ort aus der Suche aus. So finden alle den richtigen Treffpunkt.", $("#search-place"));
+  const hasCoordinates = Boolean(form.elements.latitude.value && form.elements.longitude.value);
+  if (!form.elements.location.value) form.elements.showMap.checked = false;
+  if (form.elements.showMap.checked && !hasCoordinates) {
+    editorError("Bitte wähle einen Ort aus der Suche aus oder schalte „Karte im Reiseplan anzeigen“ aus. Ein Ort ist optional.", $("#search-place"));
     return false;
   }
   if (!form.reportValidity()) return false;
@@ -547,8 +618,7 @@ function applyDraft() {
   if (
     a === null ||
     b === null ||
-    a < bounds().start ||
-    b > bounds().end ||
+    (!draft.journeyDate && (a < bounds().start || b > bounds().end)) ||
     b <= a
   ) {
     editorError(
@@ -597,8 +667,12 @@ function applyDraft() {
     draft[name] = form.elements[name].value;
   delete draft.subtitle;
   delete draft.detail;
-  for (const name of ["day", "latitude", "longitude"])
-    draft[name] = Number(form.elements[name].value);
+  draft.day = Number(form.elements.day.value);
+  // Events without a place keep neither coordinates nor a map.
+  for (const name of ["latitude", "longitude"])
+    if (hasCoordinates) draft[name] = Number(form.elements[name].value);
+    else delete draft[name];
+  if (!draft.location) delete draft.location;
   Object.assign(draft, {
     startTime: time(a),
     endTime: time(b),
@@ -609,6 +683,8 @@ function applyDraft() {
   else delete draft.mapRoute.geometry;
   // Keep unchanged route files referenced; edited routes are extracted atomically at publish.
   const stored = structuredClone(draft);
+  const journeyParts = stored.journeyParts;
+  delete stored.journeyParts;
   if (
     stored.routeRef &&
     JSON.stringify(stored.mapRoute) ===
@@ -620,6 +696,17 @@ function applyDraft() {
   checkpoint();
   if (index < 0) calendar.events.push(stored);
   else calendar.events[index] = stored;
+  if (journeyParts) {
+    for (const part of journeyParts.slice(1)) {
+      const id=crypto.randomUUID();
+      const continuation=structuredClone(stored);
+      Object.assign(continuation,{id,journeyId:id,day:calendar.days.findIndex(d=>d.isoDate===part.date)+1,startTime:part.startTime,endTime:part.endTime});
+      Object.assign(continuation.journey,{dialog:`${id}-journey`,statusId:`${id}-status`,buttonId:`${id}-refresh`});
+      continuation.journey.legs.forEach((leg,n)=>Object.assign(leg,{timeId:`${id}-leg-${n}`,platformId:`${id}-leg-${n}-platform`,delayId:`${id}-leg-${n}-delay`}));
+      calendar.events.push(continuation);
+    }
+    delete draft.journeyParts;
+  }
   controls();
   editing = false;
   updateSaveState();
@@ -629,19 +716,57 @@ function applyDraft() {
   render();
   return true;
 }
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-  await saveChanges();
+  if (saving || sessionExpired || !editing || !applyDraft()) return;
+  closeEditor();
+  message("Im Entwurf gespeichert. Es wurde nichts veröffentlicht. Erst mit „Änderungen veröffentlichen“ oben wird der geänderte Reiseplan für Teilnehmende sichtbar.");
+  if (mobileLayout()) returnToAgenda();
 });
-$("#undo").onclick = () => {
-  if (editing && !confirm("Deine Eingaben sind noch nicht gespeichert. Möchtest du sie verwerfen?")) return;
-  calendar = history.pop();
-  refreshDayOptions();
-  dirty = true;
-  controls();
+function restoreHistory(state) {
+  restoringHistory = true;
+  try {
+    const changedPlan = JSON.stringify(calendar) !== JSON.stringify(state.calendar);
+    // Snapshots are private clones, so the popped state can be adopted directly.
+    calendar = state.calendar;
+    dirty = changedPlan || dirty || state.dirty;
+    selected = state.selected;
+    draft = state.draft;
+    editing = state.editing;
+    refreshDayOptions();
+    renderCountdownSettings();
+    for (const [name, value] of Object.entries(state.countdownFields)) {
+      const field = $("#countdown-form").elements[name];
+      if (field) { field.value = value.value; if (value.checked !== undefined) field.checked = value.checked; }
+    }
+    if (draft) {
+      showDraft();
+      for (const [name, value] of Object.entries(state.fields)) {
+        const field = form.elements[name];
+        if (field) { field.value = value.value; if (value.checked !== undefined) field.checked = value.checked; }
+      }
+      window.restoreJourneyHistory?.(state.journey);
+      syncTimeFields();
+    } else closeEditor();
+  } finally {
+    lastEditorState = historySnapshot();
+    controls();
+    restoringHistory = false;
+  }
+  if (draft) mapLink();
   render();
-  if (selected) select(selected, true);
-  message("Letzte Änderung zurückgenommen.");
+}
+$("#undo").onclick = () => {
+  if (saving || sessionExpired || !history.length) return;
+  future.push(historySnapshot());
+  restoreHistory(history.pop());
+  message("Letzten Bearbeitungsschritt zurückgenommen. Änderungen am Reiseplan sind noch nicht veröffentlicht.");
+};
+$("#redo").onclick = () => {
+  if (saving || sessionExpired || !future.length) return;
+  history.push(historySnapshot());
+  restoreHistory(future.pop());
+  message("Bearbeitungsschritt wiederholt. Änderungen am Reiseplan sind noch nicht veröffentlicht.");
 };
 async function saveChanges() {
   if (saving || sessionExpired) return;
@@ -654,7 +779,7 @@ async function saveChanges() {
   saving = true;
   $("#countdown-fields").disabled = true;
   updateSaveState();
-  message("Der Reiseplan wird gespeichert. Bitte kurz warten …");
+  message("Der Reiseplan wird veröffentlicht. Bitte kurz warten …");
   $("#save").disabled = true;
   $("#undo").disabled = true;
   $("#new-event").disabled = true;
@@ -679,19 +804,20 @@ async function saveChanges() {
       }
       calendar = CalendarModel.normalize(data.calendar, trip);
     }
+    publishedCalendar = structuredClone(calendar);
     dirty = false;
-    history = [];
+    // Keep session history so directly published edits can still be undone.
     if (selected) select(selected, true);
     else render();
     $("#event-search").value = "";
     closeEditor();
-    message("Gespeichert. Alle Teilnehmenden sehen jetzt den aktualisierten Reiseplan.");
+    message("Veröffentlicht. Teilnehmende sehen den neuen Stand, wenn sie den Reiseplan online neu laden.");
     if (mobileLayout()) returnToAgenda();
   } catch (e) {
     if (!(e instanceof AdminSessionExpired)) {
       const detail = e instanceof TypeError
         ? "Bitte prüfe deine Internetverbindung." : e.message;
-      editorError(`Speichern hat nicht geklappt. Deine Änderungen sind noch hier. ${detail} Versuche es anschließend erneut.`);
+      editorError(`Veröffentlichen hat nicht geklappt. Deine Änderungen sind noch hier. ${detail} Versuche es anschließend erneut.`);
     }
   } finally {
     saving = false;
@@ -736,6 +862,7 @@ window.addEventListener("beforeunload", (e) => {
     window.PortalMaps?.setProvider(trip.mapProvider || "mapkit");
     publicationBlocked = Boolean(data.noteImportError);
     calendar = CalendarModel.normalize(data.calendar, trip);
+    publishedCalendar = structuredClone(calendar);
     window.adminJourneys = data.journeys || {};
     watchAdminSession();
     await Promise.all(
@@ -755,8 +882,8 @@ window.addEventListener("beforeunload", (e) => {
     if (today >= 0) agendaDay = today + 1;
     $("#agenda-day").value = agendaDay;
     for (const name of ["startTime", "endTime"]) {
-      form.elements[name].min = time(bounds().start);
-      form.elements[name].max = time(bounds().end);
+      form.elements[name].min = draft?.journeyDate ? "00:00" : time(bounds().start);
+      form.elements[name].max = draft?.journeyDate ? "23:59" : time(bounds().end);
     }
     render();
     controls();
@@ -780,124 +907,55 @@ function renderCountdownSettings() {
   fields.enabled.checked = settings.enabled !== false;
   fields.deadlineEnabled.checked = Boolean(settings.deadline);
   fields.deadlineTitle.value = settings.deadline?.title || "";
-  fields.deadlineAt.value = localInput(settings.deadline?.at);
+  const start = localInput(settings.deadline?.startAt || new Date().toISOString());
+  const end = localInput(settings.deadline?.at);
+  fields.deadlineStartDate.value = start.slice(0, 10);
+  fields.deadlineStartTime.value = start.slice(11);
+  fields.deadlineEndDate.value = end.slice(0, 10);
+  fields.deadlineEndTime.value = end.slice(11);
   fields.deadlineHideAt.value = localInput(settings.deadline?.hideAt);
   fields.warningMinutes.value = settings.deadline?.warningMinutes ?? 60;
 }
-$("#countdown-form").onsubmit = event => {
-  event.preventDefault();
+// Changes go straight into the draft; publishing still happens via "Veröffentlichen".
+function applyCountdownSettings() {
   if (!calendar || saving || sessionExpired) return;
-  const fields = event.currentTarget.elements;
+  const fields = $("#countdown-form").elements;
   const settings = { enabled: fields.enabled.checked };
   if (fields.deadlineEnabled.checked) {
-    const at = new Date(fields.deadlineAt.value), hideAt = new Date(fields.deadlineHideAt.value);
+    const endInput = fields.deadlineEndDate.value && fields.deadlineEndTime.value ? `${fields.deadlineEndDate.value}T${fields.deadlineEndTime.value}` : "";
+    const startInput = fields.deadlineStartDate.value && fields.deadlineStartTime.value ? `${fields.deadlineStartDate.value}T${fields.deadlineStartTime.value}` : "";
+    const at = new Date(endInput), hideAt = new Date(fields.deadlineHideAt.value || endInput);
+    const startAt = new Date(startInput);
     const title = fields.deadlineTitle.value.trim(), warningMinutes = Number(fields.warningMinutes.value);
-    if (!title || !Number.isFinite(at.getTime()) || !Number.isFinite(hideAt.getTime()) || hideAt <= at || !Number.isInteger(warningMinutes) || warningMinutes < 0 || warningMinutes > 10080) {
-      message("Bitte Titel, Abgabezeit und eine spätere Ausblendzeit eintragen. Die Warnzeit muss zwischen 0 und 10080 Minuten liegen.");
+    if (!title || !Number.isFinite(at.getTime()) || !Number.isFinite(hideAt.getTime()) || hideAt < at || (!Number.isFinite(startAt.getTime()) || startAt >= at) || !Number.isInteger(warningMinutes) || warningMinutes < 0 || warningMinutes > 10080) {
+      message("Die Abgabefrist wird übernommen, sobald Titel, „Von“ und „Bis“ mit Uhrzeit vollständig sind. „Von“ muss vor „Bis“ liegen; die optionale Ausblendzeit darf nicht vor der Abgabe liegen. Die Warnzeit muss zwischen 0 und 10080 Minuten liegen.");
       return;
     }
-    settings.deadline = {title, at: at.toISOString(), hideAt: hideAt.toISOString(), warningMinutes};
+    settings.deadline = {title, at: at.toISOString(), hideAt: hideAt.toISOString(), warningMinutes, ...(startAt ? {startAt: startAt.toISOString()} : {})};
   }
+  if (JSON.stringify(settings) === JSON.stringify(calendar.countdown || {enabled: true})) return;
   checkpoint();
   calendar.countdown = settings;
   controls();
-  message("Countdown-Einstellungen übernommen. Bitte oben Änderungen speichern.");
+  message("Countdown-Einstellungen geändert. Zum Veröffentlichen oben „Änderungen veröffentlichen“.");
+}
+$("#countdown-form").onsubmit = event => {
+  event.preventDefault();
+  applyCountdownSettings();
 };
-
-
-// Settings are saved independently, preserving any unsaved calendar draft.
-let mapSettingsRevision;
-async function loadMapSettings() {
-  const status = $("#map-settings-status");
-  $("#map-settings-fields").disabled = true;
-  try {
-    const response = await adminFetch("/api/admin/settings", {cache: "no-store"});
-    const data = await response.json();
-    if (!response.ok) throw Error(data.error);
-    csrf = data.csrf;
-    mapSettingsRevision = data.revision;
-    $("#map-settings-form").elements.mapProvider.value = data.mapProvider;
-    status.textContent = data.appleMapsConfigured ? "Apple MapKit und OpenStreetMap sind verfügbar." : "OpenStreetMap ist verfügbar. Apple MapKit benötigt einen Token im eigenen Worker.";
-    $("#map-settings-fields").disabled = false;
-  } catch (error) { status.textContent = error.message; }
-}
-for (const name of ["calendar", "settings", "invoices"]) {
-  $("#tab-" + name).addEventListener("click", () => {
-    for (const panel of ["calendar", "settings", "invoices"]) {
-      $("#" + panel + "-panel").hidden = panel !== name;
-      $("#tab-" + panel).setAttribute("aria-pressed", String(panel === name));
-    }
-    if (name === "settings") loadMapSettings();
-    if (name === "invoices") loadInvoices();
-  });
-}
-$("#map-settings-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const provider = event.currentTarget.elements.mapProvider.value;
-  $("#map-settings-fields").disabled = true;
-  $("#map-settings-status").textContent = "Wird gespeichert …";
-  try {
-    const response = await adminFetch("/api/admin/settings", {
-      method: "PUT", headers: {"content-type": "application/json", "x-csrf-token": csrf},
-      body: JSON.stringify({mapProvider: provider, revision: mapSettingsRevision}),
-    });
-    const data = await response.json();
-    if (!response.ok) throw Error(data.error);
-    mapSettingsRevision = data.revision;
-    if (trip) trip.mapProvider = data.mapProvider;
-    window.PortalMaps?.setProvider(data.mapProvider);
-    $("#map-settings-status").textContent = "Kartenanbieter gespeichert. Bereits geöffnete Karten erneut öffnen; Teilnehmende laden den Reiseplan neu.";
-  } catch (error) { $("#map-settings-status").textContent = error.message; }
-  finally { $("#map-settings-fields").disabled = sessionExpired; }
+$("#countdown-form").addEventListener("change", applyCountdownSettings);
+$("#countdown-form").addEventListener("input", event => {
+  const fields = $("#countdown-form").elements;
+  if (event.target.name === "deadlineStartDate" && !fields.deadlineEndDate.value) {
+    fields.deadlineEndDate.value = fields.deadlineStartDate.value;
+  }
+  updateSaveState();
 });
 
-let invoiceCsrf;
-async function loadInvoices() {
-  const status = $("#invoice-status");
-  status.textContent = "Dateien werden geladen …";
-  try {
-    const response = await adminFetch("/api/admin/invoices", {cache: "no-store"});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    invoiceCsrf = data.csrf;
-    $("#invoice-list").replaceChildren();
-    for (const file of data.files) {
-      const row = document.createElement("li"), link = document.createElement("a"), remove = document.createElement("button");
-      link.href = "/api/admin/invoices/" + file.id;
-      link.textContent = file.name + " (" + Math.ceil(file.size / 1024) + " KB)";
-      link.download = file.name;
-      remove.type = "button"; remove.textContent = "Löschen";
-      remove.addEventListener("click", async () => {
-        if (!confirm('„' + file.name + '“ endgültig löschen?')) return;
-        remove.disabled = true;
-        try {
-          const response = await adminFetch(link.href, {method: "DELETE", headers: {"X-CSRF-Token": invoiceCsrf, "X-Confirm-Delete": "yes"}});
-          if (!response.ok) throw new Error((await response.json()).error);
-          await loadInvoices();
-        } catch (error) { status.textContent = error.message; remove.disabled = false; }
-      });
-      link.className = "file-name"; remove.className = "danger"; row.append(link, remove); $("#invoice-list").append(row);
-    }
-    status.textContent = data.files.length ? "" : "Noch keine Rechnungen oder Belege hochgeladen.";
-  } catch (error) { status.textContent = error.message; }
-}
-$("#invoice-upload").addEventListener("submit", async event => {
-  event.preventDefault();
-  const file = $("#invoice-file").files[0], button = event.currentTarget.querySelector("button");
-  if (!file || !invoiceCsrf) return;
-  if (!file.size || file.size > 25 * 1024 * 1024) { $("#invoice-status").textContent = "Bitte eine Datei mit höchstens 25 MB wählen."; return; }
-  button.disabled = true; $("#invoice-status").textContent = "Wird hochgeladen …";
-  try {
-    const name = btoa(String.fromCharCode(...new TextEncoder().encode(file.name)));
-    const response = await adminFetch("/api/admin/invoices", {method: "PUT", headers: {"X-CSRF-Token": invoiceCsrf, "X-File-Name": name}, body: file});
-    if (!response.ok) throw new Error((await response.json()).error);
-    $("#invoice-upload").reset(); await loadInvoices();
-  } catch (error) { $("#invoice-status").textContent = error.message; }
-  finally { button.disabled = false; }
-});
 
-{
-  const guide = $(".guide-card");
-  try { if (localStorage.getItem("admin-guide-closed") === "1") guide.open = false; } catch {}
-  guide.addEventListener("toggle", () => { try { localStorage.setItem("admin-guide-closed", guide.open ? "0" : "1"); } catch {} });
+for (const button of document.querySelectorAll(".new-menu-list button")) {
+  button.addEventListener("click", () => { $(".new-menu").open = false; });
 }
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".new-menu")) $(".new-menu").open = false;
+});

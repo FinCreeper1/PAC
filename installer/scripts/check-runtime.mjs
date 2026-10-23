@@ -15,6 +15,6 @@ for(let attempt=0;attempt<40;attempt++){
 }
 assert.equal(data.stage,'ready',JSON.stringify(data));assert.equal(data.previewUrl,'https://pac.fixture.workers.dev');assert.equal(JSON.stringify(data).includes('fixture-private-token'),false);
 const other=await fetch(base+'/api/session'),otherCookie=other.headers.get('set-cookie').split(';')[0];assert.equal((await (await fetch(base+'/api/status',{headers:{cookie:otherCookie}})).json()).stage,'idle');
-const page=await fetch(base+'/');assert.equal(page.status,200);assert.match(await page.text(),/Mit Cloudflare anmelden/);assert.equal(page.headers.get('referrer-policy'),'no-referrer');
+const page=await fetch(base+'/app');assert.equal(page.status,200);assert.match(await page.text(),/Mit Cloudflare anmelden/);assert.equal(page.headers.get('referrer-policy'),'no-referrer');
 const guide=await fetch(base+'/setup.html');assert.equal(guide.status,200);assert.match(await guide.text(),/remote.php\/dav\/files/);
 console.log('Workerd HTTP integration passed: PKCE login, callback, explicit account selection, alarm deployment, private results and session isolation. Cloudflare endpoints simulated; no visual tests.');

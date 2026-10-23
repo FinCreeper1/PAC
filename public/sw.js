@@ -1,11 +1,14 @@
 /* Private, explicit offline cache. Files are stored only after explicit user confirmation. */
-const CACHE = "profilreise-offline-v30";
+const CACHE = "profilreise-offline-v38";
 const FILE_CACHE = "profilreise-offline-files-v1";
 const SHELL = [
   "/",
   "/index.html",
   "/styles.css",
+  "/shared/theme.js",
+  "/shared/theme.css",
   "/script.js",
+  "/shared/material-upload.js",
   "/deep-link.js",
   "/shared/openstreetmap.js",
   "/shared/calendar-model.js",
@@ -440,6 +443,10 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const response = await fetch(event.request);
+          if (response.status === 401 || response.status === 403) {
+            try { await clearCache(); } catch {}
+            return response;
+          }
           if (response.status >= 500) return (await cachedFileResponse(event.request)) || response;
           return response;
         } catch {
@@ -484,7 +491,11 @@ self.addEventListener("fetch", (event) => {
   }
   if (event.request.method !== "GET") return;
   const isNavigation = event.request.mode === "navigate" || event.request.destination === "document";
-  if (!isNavigation && (url.search || !allowed(url.pathname))) return;
+  // Installer HTML uses content revisions. Only that known asset query is safe
+  // to cache; token-bearing API/data URLs must still bypass the offline cache.
+  const versionedAsset = /\.(js|css)$/.test(url.pathname) &&
+    /^\?v=[a-f0-9]{16}$/.test(url.search);
+  if (!isNavigation && ((!versionedAsset && url.search) || !allowed(url.pathname))) return;
   event.respondWith(
     (async () => {
       const epoch = generation;
@@ -502,7 +513,8 @@ self.addEventListener("fetch", (event) => {
         const cached = isNavigation
           ? (await caches.match("/", { cacheName: CACHE })) ||
             (await caches.match("/index.html", { cacheName: CACHE }))
-          : await caches.match(event.request, { cacheName: CACHE });
+          : (await caches.match(event.request, { cacheName: CACHE })) ||
+            (versionedAsset ? await caches.match(url.pathname, { cacheName: CACHE }) : null);
         if (cached) return cached;
         return new Response("Dieser Inhalt ist offline noch nicht verfügbar.", {
           status: 503,

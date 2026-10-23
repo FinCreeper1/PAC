@@ -22,6 +22,10 @@ window.PortalMaps = (() => {
     if (!container.isConnected) return;
     container._osmMap?.remove();
     container.replaceChildren();
+    // Keep Leaflet panes and controls below the surrounding portal UI.
+    // Preserve positioning: idea cards place this container absolutely.
+    container.style.isolation = 'isolate';
+    container.style.zIndex = '0';
     const map = L.map(container).setView([points[0].latitude, points[0].longitude], 14);
     container._osmMap = map;
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {

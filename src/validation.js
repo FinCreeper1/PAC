@@ -12,23 +12,24 @@ export function validateCalendar(calendar, seed, trip, journeys) {
     if(typeof settings !== 'object' || typeof settings.enabled !== 'boolean') fail();
     if(settings.deadline != null) {
       const d=settings.deadline;
-      if(typeof d.title !== 'string' || !d.title.trim() || d.title.length>200 || typeof d.at !== 'string' || typeof d.hideAt !== 'string' || !Number.isFinite(Date.parse(d.at)) || !Number.isFinite(Date.parse(d.hideAt)) || Date.parse(d.hideAt)<=Date.parse(d.at) || !Number.isInteger(d.warningMinutes) || d.warningMinutes<0 || d.warningMinutes>10080) fail();
+      if(typeof d.title !== 'string' || !d.title.trim() || d.title.length>200 || typeof d.at !== 'string' || typeof d.hideAt !== 'string' || !Number.isFinite(Date.parse(d.at)) || !Number.isFinite(Date.parse(d.hideAt)) || Date.parse(d.hideAt)<Date.parse(d.at) || (d.startAt != null && (typeof d.startAt !== 'string' || !Number.isFinite(Date.parse(d.startAt)) || Date.parse(d.startAt)>=Date.parse(d.at))) || !Number.isInteger(d.warningMinutes) || d.warningMinutes<0 || d.warningMinutes>10080) fail();
     }
   }
   const bounds=CalendarModel.bounds(calendar), ids=new Set();
   const coord=(lat,lon)=>{if(typeof lat!=='number'||typeof lon!=='number'||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180) fail();};
   for(const event of calendar.events) {
     if(!event || !/^[a-z0-9-]{1,64}$/.test(event.id) || ids.has(event.id)) fail();ids.add(event.id);
-    for(const key of ['title','location']) if(typeof event[key]!=='string'||!event[key].trim()||event[key].length>1000) fail();
+    if(typeof event.title!=='string'||!event.title.trim()||event.title.length>1000) fail();
+    if(event.location!=null&&(typeof event.location!=='string'||event.location.length>1000)) fail();
     for(const key of ['subtitle','detail','note','responsible']) if(event[key]!=null&&(typeof event[key]!=='string'||event[key].length>10000)) fail();
     if(!Number.isInteger(event.day)||event.day<1||event.day>calendar.days.length) fail();
     const start=CalendarModel.minutes(event.startTime),end=CalendarModel.minutes(event.endTime);
-    if(start===null||end===null||start<bounds.start||end>bounds.end||end<=start) fail();
+    if(start===null||end===null||(!event.journeyDate&&(start<bounds.start||end>bounds.end))||end<=start) fail();
     for(const [key,values] of Object.entries({type:['travel','program','event','free'],status:['provisional','confirmed'],display:['normal','compact'],timing:['scheduled','unscheduled']})) if(!values.includes(event[key])) fail();
     if(event.timing==='unscheduled'&&event.status!=='provisional') fail();
     if(event.lane!=null&&!['','left','right'].includes(event.lane)) fail();
     if(event.showMap!=null&&typeof event.showMap!=='boolean') fail();
-    coord(event.latitude,event.longitude);
+    if(event.latitude!=null||event.longitude!=null) coord(event.latitude,event.longitude);
     for(const key of ['start','end','time','style','action','topic','materialTopic','dialog','route']) if(key in event) fail();
     if(event.journey) {
       const j=event.journey;
@@ -41,10 +42,23 @@ export function validateCalendar(calendar, seed, trip, journeys) {
         if(CalendarModel.minutes(leg.departure)===null||CalendarModel.minutes(leg.arrival)===null) fail();
       }
     }
+    if(event.journeyDate) {
+      if(!event.journeyId || !CalendarModel.validDate(event.journeyDate) || !CalendarModel.validDate(event.journeyEndDate) || event.journeyEndDate<=event.journeyDate || event.journeyDate>dates[event.day-1] || event.journeyEndDate<dates[event.day-1] || Date.parse(event.journeyEndDate)-Date.parse(event.journeyDate)>14*86400000) fail();
+    }
     if(event.journeyId) {
       if(!event.journey && !Object.hasOwn(journeys,event.journeyId)) fail();
       const legs=CalendarModel.journey(event,event.journey || journeys[event.journeyId]).legs;
-      for(let i=0;i<legs.length;i++) if(CalendarModel.minutes(legs[i].arrival)<=CalendarModel.minutes(legs[i].departure)||(i&&CalendarModel.minutes(legs[i].departure)<CalendarModel.minutes(legs[i-1].arrival))) fail();
+      let previous=-Infinity;
+      for(const leg of legs) {
+        let start=CalendarModel.minutes(leg.departure),end=CalendarModel.minutes(leg.arrival);
+        if(start===null||end===null) fail();
+        if(event.journeyDate) {
+          if(!CalendarModel.validDate(leg.departureDate)||!CalendarModel.validDate(leg.arrivalDate)||leg.departureDate<event.journeyDate||leg.arrivalDate>event.journeyEndDate) fail();
+          start+=Date.parse(leg.departureDate)/60000;end+=Date.parse(leg.arrivalDate)/60000;
+        }
+        if(end<=start||start<previous) fail();
+        previous=end;
+      }
     }
     if(event.routeRef && (!/^[a-z0-9-]{1,80}$/.test(event.routeRef)||event.mapRoute)) fail();
     if(event.mapRoute) {

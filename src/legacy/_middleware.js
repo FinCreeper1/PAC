@@ -1,6 +1,6 @@
 import trip from '../../public/data/trip.json' with { type: 'json' };
 const COOKIE_NAME = 'profilreise_session';
-const SESSION_SECONDS = 60 * 60 * 24 * 400;
+const SESSION_SECONDS = 60 * 60 * 24 * 14;
 
 const encoder = new TextEncoder();
 
@@ -16,8 +16,8 @@ function loginPage(message = '', details = trip) {
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Zugang · ${escapeHtml(details.title)}</title><style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#fbfcfa;color:#171816;font:15px system-ui,sans-serif}
-main{width:min(380px,100%);border-top:3px solid #c81d25;padding-top:28px}h1{margin:0 0 8px;font-size:28px;letter-spacing:-.04em}p{margin:0 0 28px;color:#676a64;line-height:1.55}label{display:block;margin-bottom:7px;font-size:13px;font-weight:650}input{width:100%;height:44px;padding:0 12px;border:1px solid #bfc2bc;border-radius:6px;background:white;font:inherit}input:focus{outline:3px solid rgba(200,29,37,.2);border-color:#c81d25}button{width:100%;height:44px;margin-top:12px;border:0;border-radius:6px;background:#171816;color:white;font:650 14px system-ui,sans-serif;cursor:pointer}.error{margin:0 0 18px;color:#a5151b;font-size:13px}.meta{margin-top:24px;font-size:11px}
-</style></head><body><main><h1>${escapeHtml(details.title)}</h1><p>Dieser Kalender ist nur für Teilnehmende zugänglich.</p>${notice}<form method="post" action="/__login"><label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Kalender öffnen</button></form><p class="meta">${escapeHtml(details.startDate)} – ${escapeHtml(details.endDate)}</p></main></body></html>`, {
+main{width:min(380px,100%);border-top:3px solid #c81d25;padding-top:28px}h1{margin:0 0 8px;font-size:28px;letter-spacing:-.04em}p{margin:0 0 28px;color:#676a64;line-height:1.55}label{display:block;margin-bottom:7px;font-size:13px;font-weight:650}input{width:100%;height:44px;padding:0 12px;border:1px solid #bfc2bc;border-radius:6px;background:white;font:inherit}input:focus{outline:3px solid rgba(200,29,37,.2);border-color:#c81d25}button{width:100%;height:44px;margin-top:12px;border:0;border-radius:6px;background:#171816;color:white;font:650 14px system-ui,sans-serif;cursor:pointer}.login-switch{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:12px;border:1px solid #bfc2bc;border-radius:6px;color:inherit;font-weight:650;font-size:14px;text-decoration:none}.login-switch:focus-visible{outline:3px solid rgba(200,29,37,.2);outline-offset:2px}.error{margin:0 0 18px;color:#a5151b;font-size:13px}.meta{margin-top:24px;font-size:11px}
+</style></head><body><main><h1>${escapeHtml(details.title)}</h1><p>Dieser Kalender ist nur für Teilnehmende zugänglich.</p>${notice}<form method="post" action="/__login"><label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Kalender öffnen</button></form><a class="login-switch" href="/admin">Zum Admin-Login</a><p class="meta">${escapeHtml(details.startDate)} – ${escapeHtml(details.endDate)}</p></main></body></html>`, {
     status: message ? 401 : 200,
     headers: { 'content-type': 'text/html; charset=UTF-8', 'cache-control': 'no-store' }
   });
@@ -32,9 +32,9 @@ export async function sign(value, secret) {
 export function safeEqual(left, right) {
   const a = encoder.encode(left);
   const b = encoder.encode(right);
-  if (a.length !== b.length) return false;
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  // Runtime depends only on the supplied value's length, never on the secret's.
+  let difference = a.length ^ b.length;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ (b.length ? b[index % b.length] : 0);
   return difference === 0;
 }
 
@@ -76,12 +76,15 @@ export async function onRequest(context) {
   }
 
   if (url.pathname === '/__logout') {
-    return new Response(null, {
-      status: 303,
+    // A plain page instead of a redirect: Set-Cookie on a 200 navigation is applied
+    // reliably, and "storage" is omitted because it kills the service worker mid-request
+    // and wipes local preferences such as dark mode.
+    return new Response('<!doctype html><html lang="de"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Abgemeldet</title><p>Abgemeldet. <a href="/">Weiter zur Anmeldung</a></p></html>', {
+      status: 200,
       headers: {
-        location: '/',
+        'content-type': 'text/html; charset=utf-8',
         'set-cookie': `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-        'clear-site-data': '"cache", "storage"',
+        'clear-site-data': '"cache"',
         'cache-control': 'no-store'
       }
     });

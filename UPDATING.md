@@ -1,6 +1,16 @@
 # Bestehende PAC-Instanz aktualisieren
 
-Der öffentliche Installer legt eine neue Instanz an. Für Updates wird gezielt der vorhandene Worker im eigenen Cloudflare-Konto aktualisiert. Dieser manuelle Weg benötigt Node.js 22 oder neuer und eine Cloudflare-Anmeldung, aber keinen GitHub-Account. Ein Update-Button mit OAuth ist noch nicht implementiert.
+Der öffentliche Installer erstellt neue Instanzen und aktualisiert vorhandene PAC-Worker nach Cloudflare-Anmeldung. GitHub ist für beide Wege nicht erforderlich. Alternativ steht der manuelle CLI-Weg mit Node.js 22 oder neuer zur Verfügung.
+
+## Update über die Oberfläche
+
+1. Vorher die Wolke über deren vorhandene Sicherungsfunktion sichern. Ein Code-Rollback stellt keine Reisedaten wieder her.
+2. In PAC unter Einstellungen die installierte und verfügbare Version sowie die Hinweise prüfen und „PAC aktualisieren“ öffnen.
+3. Beim Installer unter `/app` bei Cloudflare anmelden, das richtige Konto und die vorhandene PAC-Instanz auswählen. Bei einer Custom Domain die Instanz anhand des tatsächlichen Worker-Namens zuordnen.
+4. Der Installer prüft das vorhandene PORTAL-Binding, ersetzt den Code und erhält Variablen, Secrets und Bindings. Anschließend prüft er bis zu 15 Minuten die laufende Version. Bei unbestätigter Aktivierung nicht blind erneut installieren, sondern die angezeigte Meldung und Cloudflare prüfen.
+5. PAC erneut öffnen und die vorhandenen Daten prüfen. Das Update auf die neue Sitzungsbindung meldet alte Sitzungen einmalig ab; mit dem bisherigen Passwort erneut anmelden.
+
+Die folgenden CLI-Schritte sind die Alternative zur Oberfläche.
 
 ## Vorbereiten
 
@@ -53,7 +63,7 @@ Ein Code-Rollback stellt keine zwischenzeitlich geänderten Wolkendaten wieder h
 
 ## Prüfstand
 
-Bau und Konfiguration des Update-Befehls werden als Dry-Run geprüft. Ein echtes Update einer bestehenden Nutzerinstanz und ein echter Rollback sind noch nicht verifiziert; diese Anleitung beschreibt den vorbereiteten manuellen Weg.
+Automatisierte Tests prüfen OAuth-/Update-Zustände, den Erhalt von Bindings, Aktivierungswiederholungen und Versionsabfragen. Die lokale workerd-HTTP-Prüfung simuliert Cloudflare-Endpunkte; Dry-Runs veröffentlichen nichts. Diese Prüfungen bestätigen keinen echten OAuth-Durchlauf mit einem fremden Konto und keinen produktiven Rollback. Die Freigabeanforderungen stehen in `installer/README.md`.
 
 ## Instanzen mit App-Einrichtung
 

@@ -1,0 +1,16 @@
+{
+  "name": "pac-runtime-test",
+  "main": "runtime-fixture.js",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PORTAL", "class_name": "Portal" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Portal"] }],
+  "observability": { "enabled": false },
+}

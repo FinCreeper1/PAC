@@ -44,3 +44,11 @@ test('persisted sparse calendars accept additional days between existing dates',
  const invalid=structuredClone(next);invalid.days.reverse();
  assert.throws(()=>validateCalendar(invalid,sparse,trip,{}));
 });
+
+test('events may omit place and coordinates but not half a coordinate',()=>{
+ const calendar=structuredClone(seed);
+ calendar.events.push({id:'ohne-ort',title:'Treffen',day:1,startTime:'08:00',endTime:'09:00',type:'program',status:'confirmed',display:'normal',timing:'scheduled',showMap:false});
+ validateCalendar(calendar,seed,trip,{});
+ calendar.events[1].location='';validateCalendar(calendar,seed,trip,{});
+ calendar.events[1].latitude=50;assert.throws(()=>validateCalendar(calendar,seed,trip,{}));
+});

@@ -1,5 +1,6 @@
 import calendar from '../../../public/data/calendar.json' with { type: 'json' };
 import materialAliases from '../../../public/data/materials.json' with { type: 'json' };
+import { safeEqual } from '../_middleware.js';
 
 
 const MAX_DELETE_PASSWORD_LENGTH = 128;
@@ -11,15 +12,6 @@ function json(value, status = 200) {
     status,
     headers: { 'cache-control': 'private, no-store' }
   });
-}
-
-function safeEqual(left, right) {
-  const a = encoder.encode(left);
-  const b = encoder.encode(right);
-  if (a.length !== b.length) return false;
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
-  return difference === 0;
 }
 
 export function safeFilename(name) {

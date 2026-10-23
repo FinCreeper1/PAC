@@ -10,5 +10,6 @@
   "participants": [
     "Person A",
     "Person B"
-  ]
+  ],
+  "mapProvider": "openstreetmap"
 }

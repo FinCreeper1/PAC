@@ -39,3 +39,11 @@ test('temporary deadline overrides events, warns and expires back to calendar',(
  assert.match(expired.label.textContent,/Termin/);
  assert.equal(expired.timer.classList['submission-timer-warning'],false);
 });
+
+test('deadline range starts inclusively and ends at submission when no grace period is set',()=>{
+ const events=[{timing:'scheduled',day:1,title:'Termin',startTime:'08:00'}];
+ const deadline={title:'Abgabe',startAt:'2026-10-16T00:01:00Z',at:'2026-10-16T01:00:00Z',hideAt:'2026-10-16T01:00:00Z',warningMinutes:60};
+ assert.match(countdown(events,{deadline}).label.textContent,/Termin/);
+ assert.match(countdown(events,{deadline:{...deadline,startAt:'2026-10-16T00:00:00Z'}}).label.textContent,/Abgabe/);
+ assert.match(countdown(events,{deadline:{...deadline,startAt:'2026-10-15T23:00:00Z',at:'2026-10-16T00:00:00Z',hideAt:'2026-10-16T00:00:00Z'}}).label.textContent,/Termin/);
+});

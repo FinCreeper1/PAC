@@ -10,17 +10,13 @@
   const placeInput = document.getElementById("idea-place");
   const list = document.getElementById("ideas-list");
   const status = document.getElementById("ideas-status");
-  let loaded = false;
   let busy = false;
   let participantNames = [];
   let freeWindows = [];
 
-  const tripDays = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"];
-  if (dateInput) {
-    const now = new Date();
-    const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    dateInput.value = tripDays.includes(today) ? today : (dateInput.value || tripDays[0]);
-  }
+  let planningReady = false;
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
 
   function minutes(value) {
     const [hour, minute] = String(value).split(":").map(Number);
@@ -50,6 +46,7 @@
   }
 
   function updateFreeTimes() {
+    const previousTime = timeInput.value;
     timeInput.replaceChildren();
     const relevant = freeWindows.filter((slot) => slot.date === dateInput.value);
     const empty = document.createElement("option");
@@ -66,11 +63,15 @@
         timeInput.append(option);
       }
     }
+    if ([...timeInput.options].some((option) => option.value === previousTime)) timeInput.value = previousTime;
     timeInput.disabled = !relevant.length;
+    submitButton.disabled = busy || !planningReady || !relevant.length || !participantNames.length;
     const hint = document.getElementById("idea-free-time-hint");
-    hint.textContent = relevant.length
+    hint.textContent = !participantNames.length
+      ? "Die Reiseleitung muss zuerst unter Einstellungen Teilnehmende ergänzen, damit du eine Idee eintragen kannst."
+      : relevant.length
       ? "Freigegebene Freizeit: " + relevant.map((slot) => slot.start + "–" + slot.end + " Uhr").join(", ")
-      : "Für diesen Tag hat der Admin noch keine Freizeit freigegeben.";
+      : "Für diesen Tag hat die Reiseleitung noch keine Freizeit freigegeben.";
   }
 
   async function loadPlanningConfig() {
@@ -90,7 +91,27 @@
         end: event.endTime
       }))
       .filter((slot) => slot.date && slot.start && slot.end);
+    const previousAuthor = authorInput.value;
     fillNameSelect(authorInput);
+    if (participantNames.includes(previousAuthor)) authorInput.value = previousAuthor;
+    const previousDate = dateInput.value;
+    const dates = [...new Set((calendarData.days || []).map((day) => day.isoDate).filter(Boolean))].sort();
+    dateInput.replaceChildren();
+    for (const date of dates) {
+      const option = document.createElement("option");
+      option.value = date;
+      option.textContent = dayLabel(date);
+      dateInput.append(option);
+    }
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: trip.timeZone || "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date());
+    dateInput.value = dates.includes(previousDate) ? previousDate
+      : dates.includes(today) ? today : freeWindows[0]?.date || dates[0] || "";
+    dateInput.disabled = !dates.length;
+    const heading = section.querySelector(".ideas-kicker");
+    if (heading) heading.textContent = trip.title || "Reiseideen";
+    planningReady = true;
     updateFreeTimes();
   }
 
@@ -156,7 +177,7 @@
     block.className = "idea-location";
     const map = document.createElement("div");
     map.className = "idea-map";
-    map.textContent = "Apple Maps wird geladen …";
+    map.textContent = "Karte wird geladen …";
     const links = document.createElement("div");
     links.className = "idea-map-links";
     for (const [label, url] of [["In Apple Maps öffnen ↗", mapsLink(location)], ["In Google Maps öffnen ↗", location.googleUrl]]) {
@@ -210,7 +231,7 @@
     if (hasMap) {
       const map = document.createElement("div");
       map.className = "idea-map idea-map--hero";
-      map.textContent = "Apple Maps wird geladen …";
+      map.textContent = "Karte wird geladen …";
       visual.append(map);
 
       const startMap = () => renderMap(map, idea.location);
@@ -425,11 +446,12 @@
   }
 
   async function load() {
+    planningReady = false;
+    submitButton.disabled = true;
     status.textContent = "Ideen werden geladen …";
     try {
       await loadPlanningConfig();
       render(await api("GET"));
-      loaded = true;
       status.textContent = "";
     } catch (error) {
       status.textContent = error.message;
@@ -438,7 +460,7 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (busy || !input.value.trim()) return;
+    if (busy || !planningReady || timeInput.disabled || !timeInput.value || !input.value.trim()) return;
     busy = true;
     const submit = form.querySelector('button[type="submit"]');
     submit.disabled = true;
@@ -459,7 +481,7 @@
       status.textContent = error.message;
     } finally {
       busy = false;
-      submit.disabled = false;
+      updateFreeTimes();
     }
   });
 
@@ -514,7 +536,7 @@
       if (active) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     }
-    if (ideas && !loaded) load();
+    if (ideas) load();
   }
 
   for (const tab of tabs) tab.addEventListener("click", () => {

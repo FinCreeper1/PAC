@@ -3,107 +3,272 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script src="/shared/theme.js"></script>
     <title>Reiseplan · Administration</title>
     <link rel="stylesheet" href="/admin/admin.css" />
     <link rel="stylesheet" href="/shared/calendar-view.css" />
+    <link rel="stylesheet" href="/shared/theme.css" />
     <script src="/shared/openstreetmap.js" defer></script>
     <script src="/shared/calendar-model.js" defer></script>
     <script src="/shared/calendar-view.js" defer></script>
+    <script src="/admin/participants.js" defer></script>
     <script src="/admin/admin.js" defer></script>
+    <script src="/admin/invoices.js" defer></script>
+    <script src="/admin/settings.js" defer></script>
     <script src="/admin/route-editor.js" defer></script>
     <script src="/admin/journey-editor.js" defer></script>
   </head>
   <body data-view="list">
     <header>
-      <div class="brand"><span class="brand-mark" aria-hidden="true">✎</span><div><h1>Reiseplan bearbeiten</h1><p>Verwaltung für die Reiseleitung</p></div></div>
-      <a class="header-link" href="/" target="_blank" rel="noopener">So sehen es die Teilnehmenden ↗</a
-      ><button id="logout" class="ghost">Abmelden</button>
+      <h1>Reiseplan bearbeiten</h1>
+      <a href="/" target="_blank" rel="noopener">Reiseplan öffnen ↗</a
+      ><button type="button" class="theme-toggle" aria-label="Dunkles Design" aria-pressed="false" hidden><svg class="theme-icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg></button><button id="logout">Abmelden</button>
     </header>
     <main>
-      <nav class="view-switch area-tabs" aria-label="Verwaltungsbereiche">
-        <button type="button" id="tab-calendar" aria-pressed="true" aria-controls="calendar-panel"><span aria-hidden="true">📅</span> Reiseplan <small>Termine ansehen und ändern</small></button>
-        <button type="button" id="tab-invoices" aria-pressed="false" aria-controls="invoices-panel"><span aria-hidden="true">🧾</span> Rechnungen <small>Belege sicher ablegen</small></button>
-        <button type="button" id="tab-settings" aria-pressed="false" aria-controls="settings-panel"><span aria-hidden="true">⚙️</span> Einstellungen <small>Karten und Anzeige</small></button>
+      <nav class="view-switch" aria-label="Verwaltungsbereiche">
+        <button type="button" id="tab-calendar" aria-pressed="true" aria-controls="calendar-panel">Reiseplan</button>
+        <button type="button" id="tab-invoices" aria-pressed="false" aria-controls="invoices-panel">Rechnungen</button>
+        <button type="button" id="tab-settings" aria-pressed="false" aria-controls="settings-panel">Einstellungen</button>
       </nav>
-      <section id="invoices-panel" class="panel-card" aria-label="Rechnungen und Belege" hidden>
-        <h2>Rechnungen und Belege</h2>
-        <p>Hier legst du Quittungen, Rechnungen und andere Belege ab. Nur die Reiseleitung sieht diese Dateien – Teilnehmende haben keinen Zugriff.</p>
-        <form id="invoice-upload" class="upload-box">
-          <label>1. Datei auswählen <small>(PDF, Foto oder Dokument, höchstens 25 MB)</small><input type="file" id="invoice-file" required /></label>
-          <button type="submit">2. Hochladen</button>
+      <section id="invoices-panel" aria-label="Rechnungen und Belege" hidden>
+        <div class="invoice-head">
+          <div>
+            <h2>Rechnungen &amp; Budget</h2>
+            <p>Nur für die Reiseleitung sichtbar – Teilnehmende haben keinen Zugriff.</p>
+          </div>
+          <div class="invoice-head-actions">
+            <button type="button" class="ghost" id="invoice-export">CSV exportieren</button>
+            <button type="button" class="primary" id="invoice-toggle" aria-expanded="false" aria-controls="invoice-upload">+ Belege hinzufügen</button>
+          </div>
+        </div>
+
+        <div class="invoice-kpis" aria-live="polite">
+          <article class="kpi">
+            <span class="kpi-label">Ausgaben</span>
+            <strong id="invoice-total">–</strong>
+            <span class="kpi-sub" id="invoice-count">–</span>
+          </article>
+          <article class="kpi kpi-budget">
+            <span class="kpi-label">Budget <button type="button" class="link" id="budget-edit" aria-expanded="false" aria-controls="budget-form">festlegen</button></span>
+            <strong id="budget-remaining">–</strong>
+            <div class="budget-bar" aria-hidden="true"><span id="budget-progress"></span></div>
+            <span class="kpi-sub" id="budget-detail"></span>
+          </article>
+          <article class="kpi">
+            <span class="kpi-label">Pro Schüler</span>
+            <strong id="budget-per-student">–</strong>
+            <span class="kpi-sub" id="budget-per-student-detail"></span>
+          </article>
+          <article class="kpi">
+            <span class="kpi-label">Noch offen</span>
+            <strong id="invoice-open">–</strong>
+            <span class="kpi-sub" id="invoice-open-detail"></span>
+          </article>
+        </div>
+
+        <form id="budget-form" class="budget-form" hidden>
+          <label><span>Maximalbetrag pro Schüler in €</span><input id="budget-limit" inputmode="decimal" placeholder="z. B. 250,00" /></label>
+          <label><span>Anzahl Schüler</span><input id="budget-students" type="number" min="1" max="100000" step="1" placeholder="z. B. 24" /></label>
+          <label><span>Reisebudget gesamt in €</span><input id="budget-amount" inputmode="decimal" placeholder="z. B. 5000,00" /></label>
+          <button id="budget-save" class="primary" type="submit" disabled>Speichern</button>
+          <button type="button" class="ghost" id="budget-cancel">Abbrechen</button>
+          <p id="budget-status" role="status"></p>
         </form>
-        <p id="invoice-status" role="status" aria-live="polite"></p>
-        <h3>Bereits abgelegt</h3>
-        <ul id="invoice-list" class="file-list"></ul>
+
+        <section class="invoice-categories" aria-label="Ausgaben nach Kategorie">
+          <div class="category-bar" id="category-bar" aria-hidden="true"></div>
+          <div class="category-legend" id="category-legend"></div>
+          <p class="invoice-hint" id="budget-missing"></p>
+        </section>
+
+        <form class="upload-form" id="invoice-upload" hidden>
+          <div class="upload-heading">
+            <strong>Belege hinzufügen</strong><span>PDF oder Foto · max. 25 MB pro Datei</span>
+          </div>
+          <label class="drop-zone" id="invoice-drop">
+            <strong>Dateien hierher ziehen</strong>
+            <span>oder <u>vom Gerät auswählen</u> – auch mehrere auf einmal</span>
+            <input type="file" id="invoice-file" name="file" multiple required />
+          </label>
+          <div class="upload-items" id="invoice-items" hidden></div>
+          <div class="upload-shared" id="invoice-shared" hidden>
+            <label><span>Notiz für alle (freiwillig)</span><input id="invoice-note" name="note" maxlength="300" placeholder="z. B. Museumseintritt Gruppe" /></label>
+            <label class="check"><input type="checkbox" id="invoice-paid" /> <span>Bereits bezahlt</span></label>
+            <button type="submit" class="primary" id="invoice-submit">Hochladen</button>
+          </div>
+          <p class="upload-status" id="invoice-upload-status" role="status"></p>
+        </form>
+
+        <div class="invoice-files">
+          <div class="invoice-filter">
+            <input id="invoice-search" type="search" placeholder="Suchen nach Name oder Notiz" aria-label="Belege durchsuchen" />
+            <select id="invoice-category-filter" aria-label="Kategorie">
+              <option value="all">Alle Kategorien</option>
+              <option value="unterkunft">Unterkunft</option>
+              <option value="fahrt">Fahrt</option>
+              <option value="eintritt">Eintritte &amp; Programm</option>
+              <option value="verpflegung">Verpflegung</option>
+              <option value="sonstiges">Sonstiges</option>
+            </select>
+            <select id="invoice-state" aria-label="Status">
+              <option value="all">Alle Status</option>
+              <option value="open">Offen</option>
+              <option value="paid">Bezahlt</option>
+              <option value="partial">Teilbezahlt</option>
+              <option value="missing">Ohne Betrag</option>
+            </select>
+            <select id="invoice-sort" aria-label="Sortierung">
+              <option value="new">Neueste zuerst</option>
+              <option value="old">Älteste zuerst</option>
+              <option value="name">Name A–Z</option>
+              <option value="amount">Höchster Betrag</option>
+            </select>
+          </div>
+          <p id="invoice-status" class="materials-status" role="status" aria-live="polite"></p>
+          <div class="invoice-list" id="invoice-list"></div>
+          <div class="invoice-foot" id="invoice-foot"></div>
+        </div>
       </section>
-      <section id="settings-panel" class="panel-card" aria-label="Einstellungen" hidden>
-        <h2>Einstellungen</h2>
-        <form id="map-settings-form">
-          <fieldset id="map-settings-fields" disabled>
-            <legend>Welche Karte soll angezeigt werden?</legend>
-            <label>Kartenanbieter<select name="mapProvider">
-              <option value="openstreetmap">OpenStreetMap (empfohlen, funktioniert sofort)</option>
-              <option value="mapkit">Apple Karten (nur mit eingerichtetem Schlüssel)</option>
+      <section id="settings-panel" aria-label="Einstellungen" hidden>
+        <aside class="settings-aside">
+        <article class="settings-card update-card" aria-labelledby="update-title">
+          <div class="update-copy">
+            <h3 id="update-title">PAC-Version</h3>
+            <p id="pac-update-status" role="status" aria-live="polite">Version wird geprüft …</p>
+            <dl class="version-list"><div><dt>Installiert</dt><dd id="pac-version">–</dd></div><div><dt>Neueste</dt><dd id="pac-latest">–</dd></div></dl>
+            <details id="pac-release" class="release-notes" hidden><summary id="pac-release-title">Neu</summary><p id="pac-release-notes"></p><a id="pac-release-link" href="https://github.com/FinCreeper1/PAC/releases" target="_blank" rel="noopener noreferrer" hidden>Alle Hinweise auf GitHub ↗</a></details>
+          </div>
+          <a id="pac-update" class="settings-button" href="https://pac-install.linusleupold.workers.dev/">PAC aktualisieren</a>
+          <p class="settings-hint">Nach der Cloudflare-Anmeldung prüfst du die Versionen und bestätigst das Update im Installer. Passwörter, Wolke und Reisedaten bleiben erhalten.</p>
+        </article>
+        <article class="settings-card" aria-labelledby="domain-title">
+          <div class="settings-card-head"><h3 id="domain-title">Domain</h3><p>Die bestehende Adresse wird hier nicht geändert.</p></div>
+          <div class="settings-grid">
+            <label class="wide"><span>Aktuelle Adresse</span><input id="installation-domain" disabled></label>
+            <p class="settings-hint wide"><a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Custom Domain im Cloudflare-Dashboard hinzufügen oder ändern ↗</a></p>
+          </div>
+        </article>
+        </aside>
+        <div class="settings-main">
+        <form id="map-settings-form" class="settings-card" aria-labelledby="trip-settings-title">
+          <div class="settings-card-head"><h3 id="trip-settings-title">Reise &amp; Karte</h3><p>Grunddaten, die Teilnehmende im Reiseplan sehen.</p></div>
+          <fieldset id="map-settings-fields" class="settings-grid" disabled>
+            <label class="wide"><span>Reisetitel</span><input name="TRIP_TITLE" type="text" required></label>
+            <label><span>Von</span><input name="TRIP_START" type="date" required></label>
+            <label><span>Bis</span><input name="TRIP_END" type="date" required></label>
+            <label><span>Tagesbeginn</span><select name="TRIP_DAY_START"><option>00:00</option><option>01:00</option><option>02:00</option><option>03:00</option><option>04:00</option><option>05:00</option><option>06:00</option><option>07:00</option><option>08:00</option><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option><option>17:00</option><option>18:00</option><option>19:00</option><option>20:00</option><option>21:00</option></select></label>
+            <label><span>Tagesende</span><select name="TRIP_DAY_END"><option>02:00</option><option>03:00</option><option>04:00</option><option>05:00</option><option>06:00</option><option>07:00</option><option>08:00</option><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option><option>17:00</option><option>18:00</option><option>19:00</option><option>20:00</option><option>21:00</option><option>22:00</option><option>23:00</option></select></label>
+            <label><span>Startort</span><input name="TRIP_ORIGIN" type="text" required></label>
+            <label><span>Reiseziel</span><input name="TRIP_DESTINATION" type="text" required></label>
+            <label><span>Zeitzone</span><input name="TRIP_TIMEZONE" type="text" required></label>
+            <label><span>Kartenanbieter</span><select name="mapProvider">
+              <option value="openstreetmap">OpenStreetMap</option>
+              <option value="mapkit">Apple MapKit</option>
             </select></label>
-            <p class="hint">Die Auswahl gilt für alle Karten im Reiseplan und hier in der Verwaltung. Im Zweifel einfach OpenStreetMap lassen. Apple Karten funktionieren nur, wenn APPLE_MAPS_TOKEN in den Cloudflare-Einstellungen hinterlegt ist.</p>
-            <button type="submit">Einstellungen speichern</button>
+            <div class="wide participant-editor">
+              <label for="participant-input">Teilnehmende hinzufügen</label>
+              <div class="participant-entry"><textarea id="participant-input" rows="2" maxlength="12000" placeholder="Name oder mehrere Namen, jeweils eine Person pro Zeile" aria-describedby="participant-hint"></textarea><button id="participant-add" type="button">Hinzufügen</button></div>
+              <p id="participant-hint" class="settings-hint">Enter fügt Namen hinzu, Umschalt + Enter beginnt eine neue Zeile. Namen zum Bearbeiten anklicken. Anschließend Reise speichern.</p>
+              <input type="hidden" name="TRIP_PARTICIPANTS" hidden>
+              <ul id="participant-list" aria-label="Teilnehmende"></ul>
+              <p id="participant-status" class="settings-hint" role="status" aria-live="polite"></p>
+            </div>
+            <div class="settings-foot wide"><p id="map-settings-status" role="status" aria-live="polite">Einstellungen werden beim Öffnen geladen.</p><button type="submit">Reise speichern</button></div>
           </fieldset>
-          <p id="map-settings-status" role="status" aria-live="polite">Einstellungen werden beim Öffnen geladen.</p>
         </form>
+        <article class="settings-card" aria-labelledby="sessions-title">
+          <div class="settings-card-head"><h3 id="sessions-title">Angemeldete Geräte</h3><p>Bei Passwortänderungen werden bestehende Sitzungen beendet. Ohne Internet gespeicherte Dateien bleiben auf anderen Geräten bis zum nächsten Onlinezugriff verfügbar.</p></div>
+          <button type="button" id="revoke-sessions">Alle Geräte abmelden</button>
+          <p id="sessions-status" role="status" aria-live="polite"></p>
+        </article>
+        <form id="configuration-form" class="settings-card" aria-labelledby="configuration-title">
+          <div class="settings-card-head"><h3 id="configuration-title">Zugänge &amp; Wolke</h3><p>Passwortfelder leer lassen, um bisherige Werte zu behalten.</p></div>
+          <fieldset id="configuration-fields" class="settings-grid" disabled>
+            <p class="settings-group wide">Wolke</p>
+            <label class="wide"><span>WebDAV-Adresse</span><input name="NEXTCLOUD_WEBDAV_URL" type="url" required></label>
+            <label><span>Benutzername</span><input name="NEXTCLOUD_USERNAME" type="text" required></label>
+            <label><span>Reiseordner</span><input name="NEXTCLOUD_ROOT" type="text" required></label>
+            <label class="wide"><span>Neues App-Passwort</span><input name="NEXTCLOUD_APP_PASSWORD" type="password" autocomplete="new-password"></label>
+            <p class="settings-hint wide">Wenn du den Reiseordner oder Wolke-Zugang änderst, zeigt PAC danach die Inhalte des neuen Ordners. Die bisherigen Inhalte bleiben im alten Ordner erhalten: Sie werden weder gelöscht noch automatisch verschoben oder kopiert. Kopiere deshalb vorher den vollständigen Reiseordner an das neue Ziel. Der Wechsel ist nur möglich, wenn dort dieselbe Reise vorhanden ist.</p>
+            <p class="settings-group wide">Passwörter</p>
+            <label><span>Neues Teilnehmerpasswort</span><input name="PORTAL_PASSWORD" type="password" autocomplete="new-password"></label>
+            <label><span>Wiederholen</span><input name="confirmPortal" type="password" autocomplete="new-password"></label>
+            <label><span>Neues Adminpasswort</span><input name="ADMIN_PASSWORD" type="password" autocomplete="new-password"></label>
+            <label><span>Wiederholen</span><input name="confirmAdmin" type="password" autocomplete="new-password"></label>
+            <div class="settings-foot wide"><p id="configuration-status" role="status" aria-live="polite"></p><button type="submit">Zugänge speichern</button></div>
+          </fieldset>
+        </form>
+        </div>
       </section>
       <section id="calendar-panel" aria-label="Reiseplan bearbeiten">
       <div class="toolbar">
+        <div class="view-switch" role="group" aria-label="Ansicht wählen">
+          <button id="view-list" type="button" aria-pressed="true">Einzelne Tage</button
+          ><button id="view-week" type="button" aria-pressed="false">Ganze Woche</button>
+        </div>
+        <details class="new-menu">
+          <summary>+ Neu</summary>
+          <div class="new-menu-list" role="group" aria-label="Neu anlegen">
+            <button type="button" id="new-event" disabled>Neuer Termin</button>
+            <button type="button" id="new-journey" disabled>Neue Zugreise</button>
+            <button type="button" id="new-journey-from-link" disabled>Zugreise importieren</button>
+          </div>
+        </details>
         <div class="save-summary">
-          <strong id="save-state" role="status">Kalender wird geladen …</strong>
-          <span>Erst nach dem Speichern sehen alle Teilnehmenden deine Änderungen.</span>
+          <strong id="save-state" role="status">Kalender wird geladen …</strong><span id="publish-summary"></span>
         </div>
-        <div class="toolbar-actions">
-          <button id="undo" class="ghost" disabled>↶ Rückgängig</button
-          ><button id="save" disabled>Änderungen speichern</button>
-        </div>
-      </div>
-      <div class="create-row" role="group" aria-label="Etwas hinzufügen">
-        <span class="create-label">Hinzufügen:</span>
-        <button type="button" id="new-event" class="create" disabled>＋ Neuer Termin</button
-        ><button type="button" id="new-journey" class="create" disabled>🚆 Neue Zugreise</button
-        ><button type="button" id="new-journey-from-link" class="create" disabled>🔗 Bahn-Link einfügen</button>
+        <button id="undo" disabled title="Letzte Änderung zurücknehmen" aria-label="Letzte Änderung zurücknehmen">↶</button
+        ><button id="redo" type="button" disabled title="Letzten zurückgenommenen Schritt wiederholen" aria-label="Letzten zurückgenommenen Schritt wiederholen">↷</button
+        ><button id="save" disabled title="Macht deine Änderungen für alle Teilnehmenden sichtbar">Änderungen veröffentlichen</button>
       </div>
       <p id="status" role="status" aria-live="polite">
         Kalender wird geladen …
       </p>
-      <details class="quick-help guide-card" open><summary>So bearbeitest du den Reiseplan – in 3 Schritten</summary><ol class="steps"><li><b>Termin wählen</b>Tag auswählen und auf einen Termin klicken – oder oben „Neuer Termin“.</li><li><b>Angaben ändern</b>Im Formular Name, Zeit und Ort anpassen.</li><li><b>Speichern</b>„Speichern – für alle sichtbar“ klicken. Erst dann sehen es alle.</li></ol><p>Tipp: Im Wochenplan kannst du Termine mit der Maus verschieben. Diese Änderungen speicherst du danach oben mit „Änderungen speichern“. Ein Fehler? „Rückgängig“ hilft.</p></details>
-      <details class="form-section settings-card" id="countdown-settings">
-        <summary>⏱ Countdown und Abgabefrist <small>freiwillig</small></summary>
+      <div class="aside-row">
+      <details class="quick-help aside-toggle" id="countdown-settings">
+        <summary>Countdown und Abgabefrist</summary>
         <form id="countdown-form">
           <fieldset id="countdown-fields" disabled>
-            <p class="hint">Oben im Reiseplan sehen Teilnehmende einen Countdown bis zum nächsten Termin. Du kannst dort vorübergehend auch eine Frist anzeigen, z. B. „Unterlagen abgeben bis Freitag“.</p>
-            <label class="check"><input type="checkbox" name="enabled" checked /> Countdown im Reiseplan anzeigen</label>
-            <label class="check"><input type="checkbox" name="deadlineEnabled" /> Abgabefrist anzeigen</label>
-            <label>Was soll abgegeben werden?<input name="deadlineTitle" maxlength="200" placeholder="Zum Beispiel: Reiseunterlagen abgeben" /></label>
-            <div class="pair">
-              <label>Abgabe bis<input type="datetime-local" name="deadlineAt" /></label>
-              <label>Frist ausblenden ab<input type="datetime-local" name="deadlineHideAt" /></label>
+            <label class="journey-toggle countdown-toggle"><input type="checkbox" name="enabled" checked />
+              <span><strong>Countdown im Reiseplan anzeigen</strong>
+              <small>Teilnehmende sehen die verbleibende Zeit bis zum nächsten Termin.</small></span></label>
+            <label class="journey-toggle countdown-toggle"><input type="checkbox" name="deadlineEnabled" />
+              <span><strong>Vorübergehende Abgabefrist anzeigen</strong>
+              <small>Ersetzt bis zum Ausblenden den nächsten Termin im Countdown.</small></span></label>
+            <div class="journey-fields deadline-fields">
+              <label>Titel<input name="deadlineTitle" maxlength="200" placeholder="Zum Beispiel: Reiseunterlagen abgeben" /></label>
+              <div class="deadline-range" role="group" aria-label="Zeitraum der Abgabefrist">
+                <fieldset class="deadline-endpoint"><legend>Von</legend>
+                  <div class="deadline-date-time">
+                    <label>Startdatum<input type="date" name="deadlineStartDate" /></label>
+                    <label>Uhrzeit<input type="time" name="deadlineStartTime" /></label>
+                  </div>
+                </fieldset>
+                <fieldset class="deadline-endpoint"><legend>Bis · Abgabe</legend>
+                  <div class="deadline-date-time">
+                    <label>Enddatum<input type="date" name="deadlineEndDate" /></label>
+                    <label>Uhrzeit<input type="time" name="deadlineEndTime" /></label>
+                  </div>
+                </fieldset>
+              </div>
+              <details class="deadline-options"><summary>Weitere Optionen</summary>
+                <label>Warnung vor Abgabe<span class="unit-input"><input type="number" name="warningMinutes" min="0" max="10080" value="60" inputmode="numeric" /><span aria-hidden="true">Minuten</span></span></label>
+                <label>Ausblenden ab (optional)<input type="datetime-local" name="deadlineHideAt" /></label>
+              </details>
+              <p class="field-hint">Uhrzeiten gelten in deiner Gerätezeitzone. Ohne Ausblendzeit endet die Anzeige bei Abgabe. Eine spätere Ausblendzeit hält die abgelaufene Frist als Warnung sichtbar.</p>
             </div>
-            <label>Wie viele Minuten vorher warnen?<input type="number" name="warningMinutes" min="0" max="10080" value="60" /></label>
-            <p class="hint">Nach Ablauf erscheint eine Warnung, ab dem Ausblende-Zeitpunkt wieder der nächste Termin. Danach oben „Änderungen speichern“ nicht vergessen.</p>
-            <button type="submit">In Änderungen übernehmen</button>
           </fieldset>
         </form>
       </details>
-      <div class="view-toolbar" aria-label="Kalenderansicht">
-        <span class="create-label">Ansicht:</span>
-        <div class="view-switch segmented" role="group" aria-label="Ansicht wählen">
-          <button id="view-list" type="button" aria-pressed="true">Tagesliste</button>
-          <button id="view-week" type="button" aria-pressed="false">Wochenplan</button>
-        </div>
+      <details class="quick-help aside-toggle"><summary>Wie funktioniert das?</summary><ol><li>Wähle einen Tag und klicke auf einen Termin.</li><li>Ändere die Angaben oder lege einen neuen Termin an.</li><li>Klicke auf „Speichern“, um den Termin in den Entwurf zu übernehmen.</li><li>Erst mit „Änderungen veröffentlichen“ oben auf der Seite wird der gesamte geänderte Reiseplan für Teilnehmende sichtbar.</li></ol><p>Auch verschobene oder gelöschte Termine werden erst mit „Änderungen veröffentlichen“ übernommen.</p></details>
       </div>
       <div class="workspace">
         <section class="mobile-schedule" aria-label="Termine nach Tag">
           <h2>Termine</h2><label for="agenda-day">Welchen Tag möchtest du bearbeiten?</label
           ><div class="day-navigation"><button id="previous-day" type="button" aria-label="Vorheriger Tag" disabled>←</button><select id="agenda-day"></select><button id="next-day" type="button" aria-label="Nächster Tag" disabled>→</button></div>
-          <label for="event-search">Termin suchen</label>
-          <input id="event-search" type="search" placeholder="🔍 Titel, Ort oder Ansprechperson" />
-          <button id="clear-search" type="button" class="ghost" hidden>Suche löschen</button><p id="agenda-count" role="status"></p>
+          <label for="event-search">Termine an diesem Tag suchen</label>
+          <input id="event-search" type="search" placeholder="Titel, Ort oder Verantwortliche" />
+          <button id="clear-search" type="button" hidden>Suche löschen</button><p id="agenda-count" role="status"></p>
           <div id="agenda"></div>
         </section>
         <section class="schedule" aria-label="Wochenraster">
@@ -116,9 +281,9 @@
           <h2 id="editor-title" tabindex="-1">Termin auswählen</h2>
           <p id="editor-empty">Wähle einen Termin aus der Liste oder lege mit „Neuer Termin“ einen Programmpunkt an.</p>
           <form id="editor" hidden>
-            <p class="editor-help">Fülle die Angaben aus. Felder mit „freiwillig“ kannst du leer lassen.</p>
+            <p class="editor-help">Schritte 1–3 ausfüllen, Schritt 4 ist freiwillig. Gespeichert wird erst mit dem Button unten.</p>
             <p id="editor-message" role="alert" tabindex="-1" hidden></p>
-            <h3>Was findet statt?</h3>
+            <h3><span class="step">1</span> Was findet statt?</h3>
             <label>Name des Termins<input name="title" required maxlength="200" placeholder="Zum Beispiel: Besuch im Museum" /></label>
             <label>Art des Termins<select name="type">
               <option value="program">Besichtigung, Vortrag oder anderes Programm</option>
@@ -126,27 +291,38 @@
               <option value="event">Treffpunkt, Aufstehen oder Organisatorisches</option>
               <option value="free">Freizeit</option>
             </select></label>
-            <details class="form-section" id="journey-section">
-              <summary>Zugverbindung hinzufügen oder bearbeiten</summary>
-              <label><input type="checkbox" name="isJourney" /> Dieser Termin ist eine Zugreise</label>
-              <p>Lange Bahn-Links liefern Start, Ziel und Abfahrt. Bei kurzen vbid-Links ergänze diese Angaben unten. Transitous sucht passende Verbindungen; wähle anschließend deine Fahrt aus.</p>
-              <label>Link zur Verbindung (freiwillig)<input name="journeyUrl" type="url" placeholder="https://www.bahn.de/…" /></label>
+            <label class="journey-toggle"><input type="checkbox" name="isJourney" />
+              <span><strong>Als Zugreise mit Zugdaten anlegen</strong>
+              <small>Zeigt Teilnehmenden Züge, Gleise und Live-Verspätungen an. Für Termine ohne Zug leer lassen.</small></span></label>
+            <div class="form-section journey-fields" id="journey-section" hidden>
+              <h4>Zugverbindung übernehmen</h4>
+              <p class="field-hint">Im DB Navigator die Verbindung öffnen, „Teilen“ wählen und den ganzen Text hier einfügen. Wir erkennen Strecke, Datum und Abfahrt und suchen die Verbindung mit allen Umstiegen.</p>
+              <label>Text aus „Teilen“<textarea name="journeyUrl" rows="4" maxlength="10000" placeholder="Verbindung am …
+• von …, Abfahrt …
+• nach …, Ankunft …"></textarea></label>
+              <details id="journey-search-details">
+                <summary>Suchangaben ergänzen oder ändern</summary>
               <div class="pair">
-                <label>Startbahnhof (falls im Link fehlt)<input name="journeyOrigin" maxlength="200" placeholder="Hamburg-Altona" /></label>
-                <label>Zielbahnhof (falls im Link fehlt)<input name="journeyDestination" maxlength="200" placeholder="Aachen Hbf" /></label>
+                <label>Startbahnhof (falls nicht erkannt)<input name="journeyOrigin" maxlength="200" placeholder="Hamburg-Altona" /></label>
+                <label>Zielbahnhof (falls nicht erkannt)<input name="journeyDestination" maxlength="200" placeholder="Aachen Hbf" /></label>
               </div>
               <div class="pair">
-                <label>Reisetag (falls im Link fehlt)<input name="journeyDate" type="date" /></label>
-                <label>Abfahrt (falls im Link fehlt)<input name="journeyTime" type="time" /></label>
+                <label>Reisetag (falls nicht erkannt)<input name="journeyDate" type="date" /></label>
+                <label>Abfahrt (falls nicht erkannt)<input name="journeyTime" type="time" /></label>
               </div>
-              <button type="button" id="import-journey">Mit Transitous suchen</button>
-              <p>Fahrplandaten: <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous und Datenquellen</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a></p>
+              </details>
+              <button type="button" id="import-journey">Verbindung suchen</button>
+              <p class="field-hint">Fahrplandaten: <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous und Datenquellen</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-Mitwirkende</a></p>
               <p id="journey-import-status" role="status" aria-live="polite"></p>
               <div id="journey-options"></div>
-              <div id="journey-legs"></div>
-              <button type="button" id="add-leg">Zugabschnitt hinzufügen</button>
-            </details>
-            <h3>Wann findet es statt?</h3>
+              <div id="journey-summary" aria-live="polite"></div>
+              <details id="journey-manual-details">
+                <summary>Zugabschnitte selbst bearbeiten</summary>
+                <div id="journey-legs"></div>
+                <button type="button" id="add-leg">Zugabschnitt hinzufügen</button>
+              </details>
+            </div>
+            <h3><span class="step">2</span> Wann findet es statt?</h3>
             <label>Tag<select name="day"></select></label>
             <label>Steht die Uhrzeit schon fest?<select name="timing">
               <option value="scheduled">Ja, Uhrzeit eintragen</option>
@@ -162,10 +338,10 @@
               <option value="provisional">Noch nicht – als vorläufig anzeigen</option>
               <option value="confirmed">Ja, der Termin ist bestätigt</option>
             </select></label>
-            <h3>Wo treffen wir uns?</h3>
-            <label>Ort oder Adresse<input name="location" required placeholder="Zum Beispiel: Museum Ludwig, Köln" /></label>
+            <h3 id="editor-place-heading" tabindex="-1"><span class="step">3</span> Wo treffen wir uns?</h3>
+            <label>Ort oder Adresse<input name="location" placeholder="Optional, zum Beispiel: Museum Ludwig, Köln" /></label>
             <button type="button" id="search-place">Ort suchen</button>
-            <p id="place-help">Gib den Ort ein, klicke auf „Ort suchen“ und wähle den passenden Treffer.</p>
+            <p id="place-help" class="field-hint">Gib den Ort ein, klicke auf „Ort suchen“ und wähle den passenden Treffer.</p>
             <p>OpenStreetMap-Suchergebnisse: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a>. Suche über Nominatim; keine vertraulichen Angaben eingeben.</p>
             <div id="search-results" aria-live="polite"></div>
             <div id="place-preview" role="region" aria-label="Karte des ausgewählten Ortes" hidden></div>
@@ -180,13 +356,14 @@
                 <label>Längengrad<input type="number" step="any" min="-180" max="180" name="longitude" /></label>
               </div>
             </details>
+            <h3 id="editor-extras-heading" tabindex="-1"><span class="step">4</span> Weitere Angaben <small>(freiwillig)</small></h3>
             <details class="form-section">
-              <summary>Weitere Informationen hinzufügen (freiwillig)</summary>
+              <summary>Beschreibung und Ansprechperson</summary>
               <label>Weitere Informationen<textarea name="note" placeholder="Beschreibung, wichtige Hinweise oder was mitzubringen ist."></textarea></label>
               <label>Ansprechperson<input name="responsible" maxlength="200" /></label>
             </details>
             <details class="form-section">
-              <summary>Aussehen im Wochenplan (freiwillig)</summary>
+              <summary>Aussehen im Wochenplan</summary>
               <label>Spalte<select name="lane">
                 <option value="">Automatisch</option>
                 <option value="left">Links</option>
@@ -199,7 +376,7 @@
             >
             </details>
             <details class="form-section">
-            <summary>Zwischenstopps einer Fahrt (freiwillig)</summary>
+            <summary>Zwischenstopps auf der Karte</summary>
             <p>
               Haltepunkte verschieben oder mit „Nach oben“ und „Nach unten“ sortieren. Ohne Punkte
               wird nur der Terminort angezeigt.
@@ -224,8 +401,9 @@
               leeren.
             </p>
             </details>
-            <div class="editor-actions"><p>Der gesamte geänderte Reiseplan wird gespeichert.</p>
-              <button id="save-event" type="submit" disabled>Speichern – für alle sichtbar</button>
+            <div class="editor-actions"><p>Speichern veröffentlicht nichts.</p>
+              <details class="editor-save-help"><summary>Was bedeutet das?</summary><p>„Speichern“ übernimmt den Termin nur in den Entwurf in diesem Fenster. Erst wenn du oben auf „Änderungen veröffentlichen“ klickst, wird der gesamte geänderte Reiseplan für Teilnehmende sichtbar. Beim Neuladen gehen unveröffentlichte Änderungen verloren.</p></details>
+              <button id="save-event" type="submit" disabled>Speichern</button>
               <button type="button" id="cancel-event">Abbrechen</button>
             </div>
             <button type="button" id="delete-event" hidden>Termin löschen</button>

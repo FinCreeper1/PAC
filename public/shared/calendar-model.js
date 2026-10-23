@@ -66,7 +66,7 @@ globalThis.CalendarModel = (() => {
   const label = (item) =>
     item.timing === "unscheduled"
       ? "Zeit noch offen"
-      : `${item.startTime}–${item.endTime}`;
+      : `${item.startTime}–${item.endTime}${item.journeyDate ? " · Nachtverbindung" : ""}`;
   const statusLabel = (item) =>
     item.status === "provisional"
       ? "Vorläufig · Zeit noch nicht bestätigt"
@@ -109,10 +109,22 @@ globalThis.CalendarModel = (() => {
     return {
       date,
       dayIndex,
+      minute,
       active,
       next,
       minutesUntil:
         next?.day === dayIndex + 1 ? minutes(next.startTime) - minute : null,
+    };
+  }
+  // Mobile agenda order: today first, then upcoming days, past days last.
+  function agendaGroups(calendar, date) {
+    const indices = calendar.days.map((_, i) => i),
+      today = indices.find((i) => calendar.days[i].isoDate === date);
+    if (today === undefined) return { today: null, upcoming: indices, past: [] };
+    return {
+      today,
+      upcoming: indices.filter((i) => i > today),
+      past: indices.filter((i) => i < today),
     };
   }
   function layout(events, calendar) {
@@ -142,8 +154,8 @@ globalThis.CalendarModel = (() => {
         entries.push({
           item,
           column,
-          top: minutes(item.startTime) - base,
-          height: minutes(item.endTime) - minutes(item.startTime),
+          top: item.journeyDate ? Math.max(0, Math.min(bounds(calendar).duration - 15, minutes(item.startTime) - base)) : minutes(item.startTime) - base,
+          height: item.journeyDate ? Math.max(15, Math.min(bounds(calendar).end, minutes(item.endTime)) - Math.max(base, minutes(item.startTime))) : minutes(item.endTime) - minutes(item.startTime),
         });
       }
       result.push(
@@ -189,14 +201,29 @@ globalThis.CalendarModel = (() => {
     for (const event of result.events) event.day = indices.get(calendar.days[event.day-1]?.isoDate);
     return result;
   }
+  function journeyDays(data) {
+    if (!data.endDate || data.endDate === data.date) return [data];
+    if (!validDate(data.date) || !validDate(data.endDate) || data.endDate < data.date || (Date.parse(data.endDate)-Date.parse(data.date))/86400000 > 14) throw Error("Ungültiger Zeitraum der Zugverbindung.");
+    const result=[];
+    for(let stamp=Date.parse(data.date);stamp<=Date.parse(data.endDate);stamp+=86400000) {
+      const date=new Date(stamp).toISOString().slice(0,10);
+      const startTime=date===data.date?data.startTime:"00:00", endTime=date===data.endDate?data.endTime:"23:59";
+      if (startTime===endTime) continue;
+      result.push({...data,date,startTime,endTime,journeyDate:data.date,journeyEndDate:data.endDate});
+    }
+    return result;
+  }
   // Outer journey times belong to the event; only intermediate times live in journeys.json.
   function journey(item, details) {
     const result = structuredClone(details);
-    result.legs[0].departure = item.startTime;
-    result.legs.at(-1).arrival = item.endTime;
+    if (!result.legs[0].departureDate) {
+      result.legs[0].departure = item.startTime;
+      result.legs.at(-1).arrival = item.endTime;
+    }
     return result;
   }
   return {
+    journeyDays,
     extend,
     validDate,
     journey,
@@ -209,6 +236,7 @@ globalThis.CalendarModel = (() => {
     dayLabel,
     localDate,
     current,
+    agendaGroups,
     layout,
     dropStart,
   };

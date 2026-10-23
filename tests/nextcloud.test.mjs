@@ -77,3 +77,20 @@ test('fallback refuses missing DAV versions and detects a race before the condit
  const missing=new NextcloudStorage(env,async(url,options)=>options.method==='PROPFIND'?new Response('<d:multistatus xmlns:d="DAV:"/>',{status:207}):new Response('body'));
  await assert.rejects(()=>missing.readText('calendar:snapshot'),e=>e.reason==='etag');
 });
+
+
+test('metadata listings use at most four concurrent reads and preserve the DAV order',async()=>{
+ const f=mockWebdav(),names=[];
+ for(let i=0;i<9;i++){
+  const id=crypto.randomUUID();names.push('test-event/'+id);
+  f.files.set(f.root+'/metadata/test-event/'+id+'.json',{bytes:new Uint8Array(),etag:'"v1"'});
+ }
+ let active=0,max=0;
+ f.cloud.metadata=async key=>{
+  active++;max=Math.max(max,active);
+  await new Promise(resolve=>setTimeout(resolve,5));active--;
+  return {name:key};
+ };
+ const result=await f.cloud.list({prefix:'test-event/'});
+ assert.equal(max,4);assert.equal(active,0);assert.deepEqual(result.keys.map(row=>row.name),names);
+});

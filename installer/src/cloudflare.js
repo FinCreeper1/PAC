@@ -1,18 +1,17 @@
 export const API='https://api.cloudflare.com/client/v4';
-export const TERMS='https://www.cloudflare.com/terms/';
-export const PRIVACY='https://www.cloudflare.com/privacypolicy/';
 export class ApiError extends Error {
- constructor(status,stage,code,reason){super(stage);this.status=status;this.stage=stage;if(Number.isInteger(code))this.code=code;if(reason)this.reason=reason;}
+ constructor(status,stage,code){super(stage);this.status=status;this.stage=stage;if(Number.isInteger(code))this.code=code;}
 }
 export async function api(path,{method='GET',token,body,form,fetcher=fetch,stage='api'}={}) {
  const headers={};if(token)headers.authorization='Bearer '+token;
  if(body!==undefined)headers['content-type']='application/json';
  const response=await fetcher(API+path,{method,headers,body:form|| (body!==undefined?JSON.stringify(body):undefined),redirect:'manual',signal:AbortSignal.timeout(90000)});
- let payload;try{payload=await response.json();}catch{throw new ApiError(response.status,stage);}
+ const raw=await response.text();
+ if(method==='DELETE'&&response.ok&&!raw.trim())return null;
+ let payload;try{payload=JSON.parse(raw);}catch{throw new ApiError(response.status,stage);}
  if(!response.ok||payload.success!==true) {
-  const errors=Array.isArray(payload.errors)?payload.errors:[],text=errors.map(error=>String(error.message||'')).join(' ').toLowerCase();
-  const reason=text.includes('worker_subrequest_blocked')?'worker-subrequest-blocked':/ip.{0,30}(mismatch|match|differ)|(?:source|origin).{0,20}ip/.test(text)?'ip-mismatch':/expir/.test(text)?'expired':/proof|checkpoint|solution|challenge/.test(text)?'proof-rejected':/rate|limit/.test(text)?'rate-limit':undefined;
-  throw new ApiError(response.status,stage,errors.find(error=>Number.isInteger(error.code))?.code,reason);
+  const errors=Array.isArray(payload.errors)?payload.errors:[];
+  throw new ApiError(response.status,stage,errors.find(error=>Number.isInteger(error.code))?.code);
  }
  return payload.result;
 }
@@ -23,6 +22,14 @@ export function pacName(title) {
  return 'pac-'+slug;
 }
 const isPacName=name=>typeof name==='string'&&name.length<=63&&/^pac-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)&&name!=='pac-install';
+export async function deletePac(accountId,name,token,requestApi=api) {
+ if(!/^[a-f0-9]{32}$/.test(accountId||'')||!isPacName(name))throw new ApiError(400,'deletion-target');
+ const path='/accounts/'+accountId+'/workers/scripts/'+name;
+ const settings=await requestApi(path+'/settings',{token,stage:'delete-settings'});
+ if(!settings?.bindings?.some(binding=>binding.type==='durable_object_namespace'&&binding.name==='PORTAL'&&binding.class_name==='Portal'))throw new ApiError(409,'not-pac');
+ // Do not force deletion: Cloudflare must protect other Workers that reference this PAC.
+ await requestApi(path,{method:'DELETE',token,stage:'delete-worker'});
+}
 export async function deployPac(secret,payload,fetcher=fetch) {
  const prefix='/accounts/'+secret.accountId+'/workers',token=secret.apiToken,name=secret.scriptName;
  if(!/^[a-f0-9]{64}$/.test(secret.setupToken||''))throw new ApiError(400,'setup-token');
@@ -41,6 +48,23 @@ export async function deployPac(secret,payload,fetcher=fetch) {
  await api(prefix+'/scripts/'+name,{method:'PUT',token,form,fetcher,stage:'upload'});
  await api(prefix+'/scripts/'+name+'/subdomain',{method:'POST',token,body:{enabled:true,previews_enabled:false},fetcher,stage:'enable-subdomain'});
  return 'https://'+name+'.'+subdomain+'.workers.dev';
+}
+
+// Replaces only the code of an existing PAC; secrets, variables and the PORTAL Durable Object stay untouched.
+export async function updatePac(secret,payload,fetcher=fetch) {
+ const prefix='/accounts/'+secret.accountId+'/workers',token=secret.apiToken,name=secret.scriptName;
+ if(!/^[a-f0-9]{32}$/.test(secret.accountId)||!isPacName(name))throw new ApiError(400,'deployment-target');
+ const before=await api(prefix+'/scripts/'+name+'/settings',{token,fetcher,stage:'update-settings'});
+ const bindings=Array.isArray(before?.bindings)?before.bindings:[];
+ if(!bindings.some(binding=>binding.type==='durable_object_namespace'&&binding.name==='PORTAL'&&binding.class_name==='Portal'))throw new ApiError(409,'not-pac');
+ const metadata={main_module:'worker.mjs',compatibility_date:before.compatibility_date||'2026-09-10',bindings:[],keep_bindings:[...new Set(bindings.map(binding=>binding.type))],keep_assets:true};
+ if(Array.isArray(before.compatibility_flags)&&before.compatibility_flags.length)metadata.compatibility_flags=before.compatibility_flags;
+ const form=new FormData();form.set('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.set('worker.mjs',new File([payload],'worker.mjs',{type:'application/javascript+module'}));
+ const result=await api(prefix+'/scripts/'+name,{method:'PUT',token,form,fetcher,stage:'update-upload'});
+ const after=await api(prefix+'/scripts/'+name+'/settings',{token,fetcher,stage:'update-verify'});
+ for(const binding of bindings)if(!after?.bindings?.some(next=>next.name===binding.name&&next.type===binding.type))throw new ApiError(502,'update-verify');
+ let subdomain;try{subdomain=(await api(prefix+'/subdomain',{token,fetcher,stage:'subdomain'}))?.subdomain;}catch{}
+ return {url:subdomain&&/^[a-z0-9-]+$/.test(subdomain)?'https://'+name+'.'+subdomain+'.workers.dev':null,versionId:typeof result?.version_id==='string'?result.version_id:null};
 }
 
 export async function listPacs(accountId,token,requestApi=api) {

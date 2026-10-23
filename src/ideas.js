@@ -22,7 +22,7 @@ export async function handleIdeas(request,cloud,snapshot,env) {
     const author=String(body.author||'').trim(),date=String(body.date||''),time=String(body.time||''),place=String(body.place||'').trim();
     if(!snapshot.trip.participants?.includes(author)) return reply({error:'Bitte einen Namen aus der Teilnehmerliste auswählen.'},400);
     const minute=CalendarModel.minutes(time);
-    if(place.length>160||minute===null||!snapshot.calendar.events.some(event=>event.type==='free'&&event.timing==='scheduled'&&snapshot.calendar.days[event.day-1].isoDate===date&&minute>=CalendarModel.minutes(event.startTime)&&minute<CalendarModel.minutes(event.endTime))) return reply({error:'Diese Uhrzeit liegt nicht in einer freigegebenen Freizeit.'},400);
+    if(place.length>160||minute===null||!snapshot.calendar.events.some(event=>event.type==='free'&&event.timing==='scheduled'&&snapshot.calendar.days[event.day-1]?.isoDate===date&&minute>=CalendarModel.minutes(event.startTime)&&minute<CalendarModel.minutes(event.endTime))) return reply({error:'Diese Uhrzeit liegt nicht in einer freigegebenen Freizeit.'},400);
     if(ideas.length>=500) return reply({error:'Die Ideenliste ist voll.'},409);
     let location=null;
     try {location=await mapLocation(place+' '+raw);} catch {const googleUrl=raw.match(/https:\/\/maps\.app\.goo\.gl\/[A-Za-z0-9_-]+/)?.[0];if(googleUrl) location={googleUrl,name:'',latitude:null,longitude:null,retryAt:new Date(Date.now()+900000).toISOString(),resolverVersion:3};}

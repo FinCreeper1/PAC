@@ -77,6 +77,7 @@ $("#search-place").onclick = async () => {
         updateSaveState();
         mapLink();
         results.textContent = "Ort ausgewählt. Du kannst den Termin jetzt speichern.";
+        advanceEditorTo("#editor-extras-heading");
       };
       results.append(b);
     }

@@ -7,7 +7,7 @@ export function versionAssets(assets) {
   for (const [path, value] of Object.entries(assets)) {
     if (!path.endsWith('.html')) continue;
     const html = Buffer.from(value, 'base64').toString('utf8').replace(
-      /\b(src|href)="(\/[^"?#]+\.(?:js|css))"/g,
+      /\b(src|href)="(\/[^"?#]+\.(?:js|css))(?:\?v=[a-f0-9]+)?"/g,
       (match, attribute, target) => revisions[target] ? `${attribute}="${target}?v=${revisions[target]}"` : match,
     );
     assets[path] = Buffer.from(html).toString('base64');

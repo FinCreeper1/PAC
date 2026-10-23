@@ -99,7 +99,7 @@ globalThis.CalendarExport = (() => {
         `DTSTART${dateType}${item.start}`,
         `DTEND${dateType}${item.end}`,
         `SUMMARY:${escapeCalendarText(item.title)}`,
-        `LOCATION:${escapeCalendarText(item.location)}`,
+        ...(item.location ? [`LOCATION:${escapeCalendarText(item.location)}`] : []),
         `DESCRIPTION:${escapeCalendarText(item.description)}`,
         ...(item.url ? [`URL:${item.url}`] : []),
         ...((item.attachments || []).map((attachment) =>

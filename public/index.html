@@ -7,9 +7,11 @@
       name="description"
       content="Reise- und Materialportal für die schulische Profilreise."
     />
+    <script src="/shared/theme.js"></script>
     <title>Profilreise · Reiseportal</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="shared/calendar-view.css" />
+    <link rel="stylesheet" href="/shared/theme.css" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#fbfcfa" />
   </head>
@@ -27,7 +29,7 @@
         <span class="brand-mark" aria-hidden="true">PR</span>
         <span class="brand-title">Profilreise</span>
       </div>
-      <div class="header-actions"><span class="header-date"></span><a class="admin-link" href="/admin">Admin</a></div>
+      <div class="header-actions"><span class="header-date"></span><button type="button" class="theme-toggle" aria-label="Dunkles Design" aria-pressed="false" hidden><svg class="theme-icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg></button><a class="admin-link" href="/admin">Reiseleitung</a></div>
     </header>
 
     <main>
@@ -95,19 +97,27 @@
           id="today-summary"
           aria-label="Heute und nächste Termine"
         ></section>
-        <section id="offline-day-files" class="offline-day-files" hidden aria-live="polite">
-          <div>
-            <strong id="offline-day-title">Unterlagen offline speichern</strong>
-            <p id="offline-day-copy"></p>
-          </div>
-          <div class="offline-save-control">
-            <button id="offline-day-action" type="button">Offline speichern</button>
-            <button id="offline-save-scope" class="offline-scope-toggle" type="button" value="day" aria-label="Auswahl der Reiseunterlagen öffnen" aria-haspopup="menu" aria-expanded="false" aria-controls="offline-scope-menu" disabled><span aria-hidden="true">▾</span></button>
-            <div id="offline-scope-menu" class="offline-scope-menu" role="menu" aria-label="Reiseunterlagen auswählen" hidden>
-              <button id="offline-scope-day" type="button" role="menuitemradio" aria-checked="true" tabindex="-1">Nächster Reisetag</button>
-              <button id="offline-scope-week" type="button" role="menuitemradio" aria-checked="false" tabindex="-1">Gesamte Woche</button>
+        <section id="offline-day-files" class="offline-card" hidden aria-labelledby="offline-day-title">
+          <div class="offline-card-head">
+            <strong id="offline-day-title">Unterlagen offline</strong>
+            <div id="offline-scope" class="offline-scope" role="radiogroup" aria-label="Welche Unterlagen?">
+              <button id="offline-scope-day" type="button" role="radio" aria-checked="true">Nächster Reisetag</button>
+              <button id="offline-scope-week" type="button" role="radio" aria-checked="false">Ganze Reise</button>
             </div>
           </div>
+          <div class="offline-card-body">
+            <p id="offline-day-copy" class="offline-card-status" role="status"></p>
+            <button id="offline-day-action" class="offline-card-action" type="button">Herunterladen</button>
+          </div>
+          <div id="offline-progress" class="offline-progress" hidden><span id="offline-progress-bar"></span></div>
+          <details id="offline-management" class="offline-management" hidden>
+            <summary id="offline-management-summary">Auf diesem Gerät gespeichert</summary>
+            <div class="offline-management-content">
+              <div id="offline-management-days"></div>
+              <p id="offline-management-status" role="status"></p>
+              <button id="offline-remove-all" type="button" aria-label="Alle gespeicherten Unterlagen entfernen" hidden>Alle entfernen</button>
+            </div>
+          </details>
         </section>
         <!-- The same small symbols as on the cards explain device-local availability. -->
         <div class="offline-legend" aria-label="Legende Offline-Status">
@@ -123,12 +133,14 @@
         <div class="mobile-agenda" aria-label="Termine nach Reisetag">
           <p class="calendar-loading">Kalender wird geladen …</p>
         </div>
-        <details id="offline-management" class="offline-management" hidden>
-          <summary>Gespeicherte Unterlagen verwalten</summary>
-          <div class="offline-management-content">
-            <div id="offline-management-days"></div>
-            <p id="offline-management-status" role="status"></p>
-            <button id="offline-remove-all" type="button" aria-label="Alle gespeicherten Unterlagen entfernen" hidden>Alle entfernen</button>
+        <details class="print-plan-export">
+          <summary>Drucken / PDF speichern</summary>
+          <div class="day-plan-actions">
+            <label for="print-day">Druckbarer Tagesplan</label>
+            <select id="print-day" disabled aria-label="Tag für den Tagesplan"></select>
+            <button id="print-day-plan" type="button" disabled>Drucken / PDF speichern</button>
+            <button id="print-calendar-plan" class="secondary" type="button" disabled>Gesamtplan als PDF</button>
+            <p id="print-plan-status" role="status">Mit Orten, Treffpunkten und Hinweisen. Im Druckdialog „Als PDF sichern“ wählen.</p>
           </div>
         </details>
       </section>
@@ -136,7 +148,7 @@
       <section class="ideas-section" id="ideen" aria-labelledby="ideen-title" hidden>
         <div class="ideas-hero">
           <div>
-            <span class="ideas-kicker">Profilfahrt · 12.–16. Oktober</span>
+            <span class="ideas-kicker">Reiseideen</span>
             <h1 id="ideen-title">Ideen</h1>
             <p>Schlagt etwas für die freie Zeit vor und findet direkt Leute, die mitkommen.</p>
           </div>
@@ -147,11 +159,7 @@
           <div class="idea-form-grid">
             <label>Dein Name<select id="idea-author" name="author" required><option value="">Name auswählen</option></select></label>
             <label>Tag<select id="idea-date" name="date" required>
-              <option value="2026-10-12">Montag · 12. Oktober</option>
-              <option value="2026-10-13">Dienstag · 13. Oktober</option>
-              <option value="2026-10-14">Mittwoch · 14. Oktober</option>
-              <option value="2026-10-15">Donnerstag · 15. Oktober</option>
-              <option value="2026-10-16">Freitag · 16. Oktober</option>
+              <option value="">Reisetage werden geladen …</option>
             </select></label>
             <label>Uhrzeit<select id="idea-time" name="time" required><option value="">Freizeit auswählen</option></select></label>
             <label>Ort <span>(optional)</span><input id="idea-place" name="place" maxlength="160" placeholder="z. B. Markt, Café …" /></label>
@@ -296,12 +304,15 @@
       </dialog>
     </main>
 
-    <footer>
-      <span class="trip-title">Profilreise</span><span id="published-at"></span
-      ><span id="offline-status" role="status"></span
-      ><a id="portal-logout" href="/__logout"
-        >Abmelden und Offline-Daten löschen</a
-      >
+    <footer class="site-footer">
+      <div class="footer-info">
+        <strong class="trip-title">Profilreise</strong>
+        <span id="published-at"></span>
+      </div>
+      <div class="footer-actions">
+        <span id="offline-status" class="footer-status" role="status"></span>
+        <a id="portal-logout" class="footer-logout" href="/__logout">Abmelden und Offline-Daten löschen</a>
+      </div>
     </footer>
     <div id="connection-status-bar" class="connection-status-bar" role="status" aria-live="polite" hidden>
       <span id="connection-status-text"></span>
@@ -310,6 +321,7 @@
     <script src="shared/calendar-model.js"></script>
     <script src="shared/calendar-export.js"></script>
     <script src="shared/calendar-view.js"></script>
+    <script src="/shared/material-upload.js"></script>
     <script src="script.js"></script>
     <script src="shared/shared-notes.js"></script>
     <script src="shared/ideas-v2.js"></script>

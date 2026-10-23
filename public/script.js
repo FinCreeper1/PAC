@@ -44,7 +44,7 @@
     const now = new Date();
     const current = berlinTime(now);
     const deadline = settings.deadline;
-    const deadlineActive = deadline && Date.parse(deadline.hideAt) > now.getTime();
+    const deadlineActive = deadline && (!deadline.startAt || Date.parse(deadline.startAt) <= now.getTime()) && Date.parse(deadline.hideAt) > now.getTime();
     const next = deadlineActive ? {title: deadline.title, start: Date.parse(deadline.at), deadline: true} : targets.find(item => item.start > current);
     if (timer) {
       timer.hidden = settings.enabled === false || (loaded && !next);
@@ -108,7 +108,7 @@ function updateFileProviderNotice(unavailable) {
     fileOutageNotice.innerHTML = `
       <form method="dialog">
         <h2 id="file-outage-title">Dateien derzeit nicht verfügbar</h2>
-        <p id="file-outage-description">Weder die Wolke noch der Hetzner-Speicher sind gerade erreichbar. Bereits offline gespeicherte Dateien bleiben verfügbar. Bitte versuchen Sie es später erneut.</p>
+        <p id="file-outage-description">Der Dateispeicher ist gerade nicht erreichbar. Bereits offline gespeicherte Dateien bleiben verfügbar. Bitte versuche es später erneut.</p>
         <div class="delete-actions"><button type="submit" autofocus>Verstanden</button></div>
       </form>`;
     document.body.append(fileOutageNotice);
@@ -206,7 +206,7 @@ function makeMarker(mapkit, point, index) {
 
 async function renderEventMap(event, container) {
   const directLink = appleMapsLink(event);
-  container.innerHTML = `<div class="map-loading">Apple Maps wird geladen …</div><a class="map-link" href="${directLink}" target="_blank" rel="noopener">In Apple Maps öffnen ↗</a>`;
+  container.innerHTML = `<div class="map-loading">Karte wird geladen …</div><a class="map-link" href="${directLink}" target="_blank" rel="noopener">In Apple Maps öffnen ↗</a>`;
   try {
     if (window.PortalMaps && await PortalMaps.isOSM()) {
       container.replaceChildren();
@@ -348,7 +348,7 @@ function openEventExtras(event, dialog) {
     noteText.classList.toggle("is-empty", !note);
   });
   addEventExport(container, item.id);
-  if (item.showMap !== false) {
+  if (item.showMap !== false && Number.isFinite(item.latitude) && Number.isFinite(item.longitude)) {
     const section = createTextElement("section", "");
     section.className = "event-map";
     const heading = createTextElement("div", "");
@@ -553,10 +553,48 @@ function updateToday() {
     .forEach((el) =>
       el.classList.toggle("is-today", el.dataset.date === state.date),
     );
-  const currentSection = document.querySelector(
-    `.agenda-day[data-date="${state.date}"]`,
+  arrangeAgenda(state);
+}
+
+// Today, the following days and the past days form separate, labelled groups.
+function arrangeAgenda(state) {
+  const agenda = document.querySelector(".mobile-agenda"),
+    sections = [...agenda.querySelectorAll(".agenda-day")],
+    groups = CalendarModel.agendaGroups(portalCalendar, state.date);
+  if (sections.length !== portalCalendar.days.length) return;
+  const minute = CalendarModel.minutes(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()),
   );
-  if (currentSection) currentSection.parentElement.prepend(currentSection);
+  sections.forEach((section, i) => {
+    const heading = section.querySelector("h2"),
+      label = CalendarModel.dayLabel(portalCalendar.days[i]);
+    heading.textContent = i === groups.today ? `Heute · ${label}` : label;
+    section.querySelectorAll(".agenda-event[data-event-id]").forEach((button) => {
+      const item = portalCalendar.events.find((e) => e.id === button.dataset.eventId);
+      button.classList.toggle("is-past",
+        i === groups.today && item?.timing !== "unscheduled" &&
+          CalendarModel.minutes(item.endTime) <= minute);
+    });
+  });
+  const groupLabel = (text) => {
+    const label = createTextElement("p", text);
+    label.className = "agenda-group-label";
+    return label;
+  };
+  const parts = [];
+  if (groups.today !== null) {
+    parts.push(sections[groups.today]);
+    if (groups.upcoming.length) parts.push(groupLabel("Nächste Tage"));
+  }
+  parts.push(...groups.upcoming.map((i) => sections[i]));
+  if (groups.past.length) {
+    const past = agenda.querySelector(".agenda-past") || document.createElement("details");
+    past.className = "agenda-past";
+    const summary = createTextElement("summary", `Vergangene Tage (${groups.past.length})`);
+    past.replaceChildren(summary, ...groups.past.map((i) => sections[i]));
+    parts.push(past);
+  }
+  agenda.replaceChildren(...parts);
 }
 
 function renderJourneys() {
@@ -601,7 +639,7 @@ function renderJourneys() {
       live.id = leg.timeId;
       departure.append(
         createTextElement("span", "Abfahrt · Plan"),
-        createTextElement("strong", leg.departure),
+        createTextElement("strong", leg.departure + (leg.departureDate ? ` · ${leg.departureDate}` : "")),
         live,
       );
       const origin = createTextElement("div", "");
@@ -615,7 +653,7 @@ function renderJourneys() {
       arrivalLive.id = `${leg.timeId}-arrival`;
       arrival.append(
         createTextElement("span", "Ankunft · Plan"),
-        createTextElement("strong", leg.arrival),
+        createTextElement("strong", leg.arrival + (leg.arrivalDate ? ` · ${leg.arrivalDate}` : "")),
         arrivalLive,
       );
       const destination = createTextElement("div", "");
@@ -636,24 +674,37 @@ function renderJourneys() {
         dialog.append(transfer);
       }
     }
+    const journeyFooter = createTextElement("div", "");
+    journeyFooter.className = "journey-footer";
     const link = createTextElement("a", "Verbindung auf bahn.de ansehen ↗");
     link.className = "bahn-link";
     link.href = journey.url;
     link.target = "_blank";
     link.rel = "noopener";
-    dialog.append(link);
-    if (journey.source === "transitous") {
-      const attribution = createTextElement("a", "Fahrplandaten: Transitous und Datenquellen");
-      attribution.href = "https://transitous.org/sources/";
-      attribution.target = "_blank";
-      attribution.rel = "noopener";
-      dialog.append(attribution);
-      const osm = createTextElement("a", "© OpenStreetMap-Mitwirkende");
-      osm.href = "https://www.openstreetmap.org/copyright";
-      osm.target = "_blank";
-      osm.rel = "noopener";
-      dialog.append(osm);
-    }
+    const credits = createTextElement("p", "");
+    credits.className = "journey-credits";
+    const source = (label, text, href) => {
+      const item = createTextElement("span", label + " ");
+      const anchor = createTextElement("a", text);
+      anchor.href = href;
+      anchor.target = "_blank";
+      anchor.rel = "noopener";
+      item.append(anchor);
+      return item;
+    };
+    if (journey.source === "transport-rest")
+      credits.append(source("Fahrplan:", "transport.rest", "https://v6.db.transport.rest/"));
+    if (journey.source === "transitous")
+      credits.append(
+        source("Fahrplan:", "Transitous", "https://transitous.org/sources/"),
+        source("Haltestellen:", "© OpenStreetMap-Mitwirkende", "https://www.openstreetmap.org/copyright"),
+      );
+    credits.append(
+      source("Echtzeit:", "Deutsche Bahn (IRIS)", "https://developers.deutschebahn.com/db-api-marketplace/apis/product/timetables"),
+    );
+    if (journey.url) journeyFooter.append(link);
+    journeyFooter.append(credits);
+    dialog.append(journeyFooter);
     const extras = createTextElement("div", "");
     extras.className = "event-extras";
     dialog.append(extras);
@@ -721,7 +772,7 @@ async function loadCalendar() {
     document
       .querySelectorAll(".header-date,.date-line")
       .forEach((el) => (el.textContent = range));
-    document.querySelector("footer .trip-title").textContent = trip.title;
+    document.querySelector(".site-footer .trip-title").textContent = trip.title;
     const updated =
       data.publishedAt || responses[0].headers.get("last-modified");
     document.getElementById("published-at").textContent = updated
@@ -777,6 +828,7 @@ async function loadCalendar() {
     exportButton.disabled = !exportEvents.size;
     exportButton.onclick = () =>
       downloadCalendar([...exportEvents.values()], `${trip.id}.ics`);
+    setupDayPlanPrint(data, cached);
     updateToday();
     clearInterval(todayTimer);
     todayTimer = setInterval(updateToday, 60000);
@@ -855,7 +907,7 @@ async function fetchLiveStop(train, irisDate, station, hour, event) {
 async function fetchLiveTrain(train, irisDate) {
   const safeStop = (...args) => fetchLiveStop(...args).catch(() => null);
   const arrivalHour = Number(train.arrival.slice(0, 2));
-  const arrivalDate = train.arrival < train.departure
+  const arrivalDate = train.arrivalDate ? train.arrivalDate.replaceAll("-", "").slice(2) : train.arrival < train.departure
     ? (() => { const date = parseIrisTime(`${irisDate}1200`); date.setDate(date.getDate() + 1);
         return `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`; })()
     : irisDate;
@@ -921,7 +973,7 @@ async function refreshLiveTrains(journey) {
   button.disabled = true;
   try {
     const results = await Promise.all(
-      journey.trains.map((train) => fetchLiveTrain(train, journey.irisDate)),
+      journey.trains.map((train) => fetchLiveTrain(train, train.departureDate?.replaceAll("-", "").slice(2) || journey.irisDate)),
     );
     journey.trains.forEach((train, index) =>
       renderLiveTrain(train, results[index]),
@@ -1191,37 +1243,6 @@ document.getElementById("upload-file").addEventListener("change", (event) => {
   uploadStatus.classList.remove("error");
 });
 
-function uploadHeader(value) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function sendMaterialUpload(file, project, password, deletePassword, onProgress) {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", `/api/materials?project=${encodeURIComponent(project)}`);
-    request.responseType = "json";
-    request.setRequestHeader("Content-Type", "application/octet-stream");
-    request.setRequestHeader("X-Portal-Password", uploadHeader(password));
-    request.setRequestHeader("X-Delete-Password", uploadHeader(deletePassword));
-    request.setRequestHeader("X-File-Name", uploadHeader(file.name));
-    request.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0)
-        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
-    });
-    request.addEventListener("load", () => {
-      const result = request.response || {};
-      if (request.status >= 200 && request.status < 300) resolve(result);
-      else reject(new Error(result.error || `Upload fehlgeschlagen (HTTP ${request.status}).`));
-    });
-    request.addEventListener("error", () => reject(new Error("Upload fehlgeschlagen. Bitte die Verbindung prüfen.")));
-    request.addEventListener("abort", () => reject(new Error("Upload wurde abgebrochen.")));
-    request.send(file);
-  });
-}
-
 uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!activeTopicId) return;
@@ -1406,7 +1427,7 @@ document.getElementById("subscribe-calendar").onclick = async () => {
       !response.headers.get("content-type")?.includes("application/json")
     )
       throw Error(
-        "Das Kalenderabo ist auf dem PHP-Portal nach Anmeldung verfügbar.",
+        "Das Kalenderabo konnte nicht geladen werden. Bitte prüfe deine Internetverbindung und melde dich gegebenenfalls erneut an.",
       );
     const data = await response.json();
     const input = document.getElementById("subscription-url");
@@ -1434,7 +1455,12 @@ document.getElementById("portal-logout").onclick = async (event) => {
   if ("caches" in window)
     for (const key of await caches.keys())
       if (key.startsWith("profilreise-offline-")) await caches.delete(key);
-  location.href = "/__logout";
+  // Without a registration the logout navigation goes straight to the network.
+  try {
+    for (const registration of (await navigator.serviceWorker?.getRegistrations()) || [])
+      await registration.unregister();
+  } catch {}
+  location.replace("/__logout");
 };
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.addEventListener("message", (event) => {
@@ -1443,3 +1469,203 @@ if ("serviceWorker" in navigator)
         "Offline verfügbar · lokal gespeichert " +
         new Date().toLocaleString("de-DE");
   });
+
+
+function setupDayPlanPrint(source, cached) {
+  const select = document.getElementById("print-day");
+  const button = document.getElementById("print-day-plan");
+  select.replaceChildren(new Option("Alle Reisetage", "all"));
+  portalCalendar.days.forEach((day, i) => select.add(new Option(CalendarModel.dayLabel(day), String(i + 1))));
+  const today = portalCalendar.days.findIndex(day => day.isoDate === CalendarModel.localDate());
+  select.value = today < 0 ? "all" : String(today + 1);
+  select.disabled = button.disabled = !portalCalendar.days.length;
+  const part = (tag, text, className) => {
+    const element = createTextElement(tag, text);
+    if (className) element.className = className;
+    return element;
+  };
+  const longDate = isoDate => new Intl.DateTimeFormat("de-DE", {weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC"}).format(new Date(`${isoDate}T12:00:00Z`));
+  button.onclick = async () => {
+    button.disabled = true;
+    const status = document.getElementById("print-plan-status");
+    status.textContent = "Tagesplan wird vorbereitet …";
+    try {
+      const events = portalCalendar.events.filter(item => select.value === "all" || item.day === Number(select.value));
+      await Promise.all(events.map(loadVisibleEventNote));
+      document.getElementById("print-day-plan-content")?.remove();
+      const content = part("section", "");
+      content.id = "print-day-plan-content";
+      const header = part("header", "", "print-plan-header");
+      header.append(part("span", "Tagesplan", "print-plan-kicker"), part("h1", tripConfig.title));
+      const meta = part("p", "", "print-plan-meta");
+      const published = source.publishedAt;
+      if (cached) meta.append(part("span", "Offline-Kopie", "print-plan-flag"));
+      meta.append(part("span", "Erstellt " + new Date().toLocaleString("de-DE")), part("span", published ? "Veröffentlicht " + new Date(published).toLocaleString("de-DE") : "Veröffentlichungsstand unbekannt"));
+      header.append(meta);
+      content.append(header);
+      portalCalendar.days.forEach((day, index) => {
+        if (select.value !== "all" && Number(select.value) !== index + 1) return;
+        const section = part("section", "", "print-plan-day");
+        const dayHeading = part("div", "", "print-plan-day-heading");
+        dayHeading.append(part("span", "Tag " + (index + 1), "print-plan-day-number"), part("h2", longDate(day.isoDate)));
+        section.append(dayHeading);
+        const items = events.filter(item => item.day === index + 1).sort((a, b) => (a.timing === "unscheduled") - (b.timing === "unscheduled") || String(a.startTime).localeCompare(String(b.startTime)));
+        if (!items.length) section.append(part("p", "Keine Termine geplant.", "print-plan-empty"));
+        for (const item of items) {
+          const entry = part("article", "", "print-plan-event " + printEventClasses(item) + (item.status === "provisional" ? " is-provisional" : ""));
+          const time = part("div", "", "print-plan-time");
+          if (item.timing === "unscheduled") time.append(part("span", "Zeit offen"));
+          else time.append(part("strong", item.startTime), part("span", "bis " + item.endTime));
+          const body = part("div", "", "print-plan-body");
+          body.append(part("h3", item.title));
+          const statusText = CalendarModel.statusLabel(item);
+          if (statusText) body.append(part("p", statusText, "print-plan-status"));
+          for (const text of [item.subtitle, item.detail]) if (text) body.append(part("p", text, "print-plan-text"));
+          if (item.location) {
+            const location = part("p", "", "print-plan-location");
+            location.append(part("span", "Ort / Treffpunkt", "print-plan-label"), part("span", item.location));
+            body.append(location);
+          }
+          if (item.note) {
+            const note = part("div", "", "print-plan-note");
+            note.append(part("span", "Hinweise", "print-plan-label"), part("p", item.note));
+            body.append(note);
+          }
+          const legs = journeys[item.journeyId]?.legs || [];
+          if (legs.length) {
+            const table = part("table", "", "print-plan-journey");
+            const head = part("tr", "");
+            for (const label of ["Zug", "Ab", "Von · Gleis", "An", "Nach"]) head.append(part("th", label));
+            table.append(head);
+            for (const leg of legs) {
+              const row = part("tr", "");
+              row.append(part("td", leg.service || "–"), part("td", (leg.departure || "–") + (leg.departureDate ? " · " + leg.departureDate : "")), part("td", [leg.origin, leg.platform].filter(Boolean).join(" · ") || "–"), part("td", (leg.arrival || "–") + (leg.arrivalDate ? " · " + leg.arrivalDate : "")), part("td", leg.destination || "–"));
+              table.append(row);
+              if (leg.connection) {
+                const transfer = part("tr", "", "print-plan-transfer");
+                const cell = part("td", leg.connection);
+                cell.colSpan = 5;
+                transfer.append(cell);
+                table.append(transfer);
+              }
+            }
+            body.append(table);
+          }
+          entry.append(time, body);
+          section.append(entry);
+        }
+        content.append(section);
+      });
+      content.append(part("footer", "Reserveplan zum Weitergeben. Änderungen und aktuelle Gleise bitte im Portal prüfen. Alle Zeiten sind Ortszeiten der Reise.", "print-plan-footer"));
+      document.body.append(content);
+      status.textContent = "Im Druckdialog drucken oder als PDF sichern. Hinweise werden so übernommen, wie sie im Portal vorliegen.";
+      window.print();
+    } catch {
+      status.textContent = "Der Tagesplan konnte nicht vorbereitet werden. Bitte erneut versuchen.";
+    } finally {
+      button.disabled = false;
+    }
+  };
+  setupCalendarPrint(source, cached, part);
+}
+
+function setupCalendarPrint(source, cached, part) {
+  const button = document.getElementById("print-calendar-plan");
+  if (!button) return;
+  button.disabled = !portalCalendar.days.length;
+  button.onclick = () => {
+    const status = document.getElementById("print-plan-status");
+    try {
+      document.getElementById("print-day-plan-content")?.remove();
+      const scheduled = portalCalendar.events.filter(item => item.timing !== "unscheduled" && CalendarModel.minutes(item.startTime) !== null);
+      const startOf = item => CalendarModel.minutes(item.startTime);
+      const endOf = item => Math.max(startOf(item) + 15, CalendarModel.minutes(item.endTime) ?? 0);
+      const first = Math.min(8 * 60, ...scheduled.map(startOf));
+      const last = Math.max(20 * 60, ...scheduled.map(endOf));
+      const from = Math.floor(first / 60) * 60, to = Math.min(24 * 60, Math.ceil(last / 60) * 60), span = to - from;
+      const content = part("section", "", "print-calendar");
+      content.id = "print-day-plan-content";
+      const published = source.publishedAt;
+      const range = portalCalendar.days.length ? `${CalendarModel.dayLabel(portalCalendar.days[0])} – ${CalendarModel.dayLabel(portalCalendar.days.at(-1))}` : "";
+      for (let offset = 0; offset < portalCalendar.days.length; offset += 7) {
+        const page = part("div", "", "print-calendar-page");
+        const header = part("header", "", "print-calendar-header");
+        const titles = part("div", "");
+        titles.append(part("span", "Gesamtplan · Kalenderansicht", "print-plan-kicker"), part("h1", tripConfig.title));
+        const meta = part("p", "", "print-plan-meta");
+        if (cached) meta.append(part("span", "Offline-Kopie", "print-plan-flag"));
+        meta.append(part("span", range), part("span", "Erstellt " + new Date().toLocaleString("de-DE")), part("span", published ? "Veröffentlicht " + new Date(published).toLocaleString("de-DE") : "Veröffentlichungsstand unbekannt"));
+        header.append(titles, meta);
+        page.append(header);
+        const days = portalCalendar.days.slice(offset, offset + 7);
+        const grid = part("div", "", "print-calendar-grid");
+        grid.style.setProperty("--days", String(days.length));
+        grid.append(part("div", "", "print-calendar-corner"));
+        days.forEach((day, i) => {
+          const head = part("div", "", "print-calendar-dayhead");
+          head.append(part("span", "Tag " + (offset + i + 1)), part("strong", CalendarModel.dayLabel(day)));
+          grid.append(head);
+        });
+        grid.append(part("div", "Zeit offen", "print-calendar-axis-open"));
+        days.forEach((day, i) => {
+          const cell = part("div", "", "print-calendar-open");
+          for (const item of portalCalendar.events.filter(e => e.day === offset + i + 1 && !scheduled.includes(e))) cell.append(part("span", item.title, "print-calendar-open-event " + printEventClasses(item)));
+          grid.append(cell);
+        });
+        const axis = part("div", "", "print-calendar-axis");
+        for (let minute = from; minute < to; minute += 60) {
+          const label = part("span", String(minute / 60).padStart(2, "0") + ":00");
+          label.style.top = ((minute - from) / span * 100) + "%";
+          axis.append(label);
+        }
+        grid.append(axis);
+        days.forEach((day, i) => {
+          const column = part("div", "", "print-calendar-column");
+          column.style.setProperty("--hours", String(span / 60));
+          const items = scheduled.filter(e => e.day === offset + i + 1).sort((a, b) => startOf(a) - startOf(b) || endOf(b) - endOf(a));
+          let cluster = [], clusterEnd = -1;
+          const place = () => {
+            const lanes = [];
+            const placed = cluster.map(item => {
+              let lane = lanes.findIndex(end => end <= startOf(item));
+              if (lane < 0) lane = lanes.length;
+              lanes[lane] = endOf(item);
+              return [item, lane];
+            });
+            for (const [item, lane] of placed) {
+              const block = part("div", "", "print-calendar-event " + printEventClasses(item) + (item.status === "provisional" ? " is-provisional" : ""));
+              block.style.top = ((startOf(item) - from) / span * 100) + "%";
+              block.style.height = ((Math.min(endOf(item), to) - startOf(item)) / span * 100) + "%";
+              block.style.left = (lane / lanes.length * 100) + "%";
+              block.style.width = (100 / lanes.length) + "%";
+              block.append(part("strong", item.title), part("span", CalendarModel.label(item)));
+              if (item.location) block.append(part("span", item.location, "print-calendar-location"));
+              column.append(block);
+            }
+            cluster = [];
+          };
+          for (const item of items) {
+            if (cluster.length && startOf(item) >= clusterEnd) place();
+            cluster.push(item);
+            clusterEnd = Math.max(clusterEnd, endOf(item));
+          }
+          if (cluster.length) place();
+          grid.append(column);
+        });
+        page.append(grid);
+        page.append(part("footer", "Reserveplan zum Weitergeben. Details, Hinweise und Bahnverbindungen stehen im Tagesplan. Alle Zeiten sind Ortszeiten der Reise.", "print-plan-footer"));
+        content.append(page);
+      }
+      document.body.append(content);
+      status.textContent = "Im Druckdialog drucken oder als PDF sichern. Querformat wird automatisch verwendet.";
+      window.print();
+    } catch {
+      status.textContent = "Die Kalenderansicht konnte nicht vorbereitet werden. Bitte erneut versuchen.";
+    }
+  };
+}
+
+function printEventClasses(item) {
+  const kind = item.type === "travel" ? "train" : item.type === "free" ? "free" : item.type === "event" ? "notice" : "program";
+  return `${kind}-event${item.status === "provisional" ? " draft-event" : ""}`;
+}

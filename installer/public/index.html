@@ -1,20 +1,71 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="PAC im eigenen Cloudflare-Konto einrichten. Ohne GitHub-Verknüpfung, mit Ihrer bestehenden Wolke."><title>PAC einrichten</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><header><a href="/" class="wordmark" aria-label="PAC Einrichtung">PAC<span aria-hidden="true">.</span></a><a href="https://github.com/FinCreeper1/PAC" target="_blank" rel="noopener noreferrer">Quellcode ↗</a></header>
-<main><section class="introduction"><h1>Ihr Reiseplan.<br>Ihr PAC.</h1><p>Richten Sie PAC in Ihrem eigenen Cloudflare-Konto ein. Kalender, Dateien und Notizen bleiben in Ihrer Wolke.</p><ol class="steps"><li>Bei Cloudflare anmelden</li><li>Konto wählen und PAC bereitstellen</li><li>Ihre Wolke verbinden</li></ol><p class="aside">Sie benötigen einen Cloudflare-Account und einen Nextcloud-Zugang. Einen GitHub-Account benötigen Sie nicht.</p></section>
-<section class="setup" aria-labelledby="setup-heading"><div id="start-view"><h2 id="setup-heading">PAC einrichten</h2><p>Melden Sie sich direkt bei Cloudflare an. Anschließend wählen Sie Ihr Konto aus und bestätigen die Bereitstellung.</p>
-<form id="setup-form"><button id="start" type="submit" disabled>Mit Cloudflare anmelden</button></form><p id="availability" class="fine"></p></div>
-<div id="account-view" hidden><h2>Konto auswählen</h2><button class="secondary logout" type="button">Abmelden</button><form id="deploy-form"><label for="account">Cloudflare-Konto</label><select id="account" required></select><section aria-labelledby="existing-title"><h3 id="existing-title">Ihre bisherigen PACs</h3><p id="pacs-status" role="status"></p><ul id="pacs-list"></ul><button id="pacs-refresh" class="secondary" type="button">Liste aktualisieren</button></section><h3>Neues PAC erstellen</h3><label for="trip-name">Name der Reise</label><input id="trip-name" type="text" maxlength="200" required placeholder="Zum Beispiel: Berlin 2027" /><p class="fine">Die Adresse beginnt mit pac- und Ihrem Reisenamen, etwa pac-berlin-2027. Der Name ist öffentlich sichtbar. Bestehende PAC-Adressen bleiben erhalten.</p><p>Ein neuer PAC-Worker wird in diesem Konto erstellt. Bestehende Worker bleiben erhalten. Je nach Nutzung können Cloudflare-Kosten entstehen.</p><button type="submit">PAC in diesem Konto bereitstellen</button></form></div>
-<div id="progress-view" hidden><h2>Ihr PAC wird vorbereitet</h2><p id="stage" role="status" aria-live="polite">Vorbereitung läuft …</p><p class="fine">Sie können diese Seite neu laden. Der Fortschritt bleibt in diesem Browser erhalten.</p></div>
-<div id="result-view" hidden>
-<h2>Ihr PAC ist bereit zur Einrichtung</h2>
-<p>Legen Sie jetzt Ihre Passwörter fest und verbinden Sie Ihre Wolke.</p>
-<a id="configure" class="button" target="_blank" rel="noopener noreferrer">PAC jetzt einrichten ↗</a>
-<p class="fine">Ihr persönlicher Einrichtungslink – bitte nicht weitergeben. Nach dem Abschließen ist die Ersteinrichtung gesperrt.</p>
-<p class="fine" role="note">Die neue Adresse kann etwa eine Minute brauchen, bis sie erreichbar ist. Falls nötig, laden Sie sie kurz darauf erneut.</p>
-<div class="result-next"><a id="preview" class="button secondary" target="_blank" rel="noopener noreferrer">Reiseplan öffnen ↗</a><p class="fine">Nach der Einrichtung gelangen Sie hier zu Ihrem PAC.</p></div>
-<details><summary>Erweiterte Optionen</summary><p class="fine">Für die normale Einrichtung benötigen Sie diese Optionen nicht.</p><p><a id="dashboard" target="_blank" rel="noopener noreferrer">Bei Cloudflare verwalten ↗</a></p><p><a href="/setup.html" target="_blank" rel="noopener noreferrer">Manuelle Einrichtung für ältere Instanzen ↗</a></p></details>
-<button id="forget" class="secondary" type="button">Vom Installer abmelden</button>
-</div>
-<div id="error" role="alert" hidden></div><div id="recovery" hidden><p>Prüfen Sie vor einem neuen Versuch, ob <strong id="recovery-name"></strong> bereits angelegt wurde. Eine erneute Installation erstellt einen weiteren Worker.</p><a id="recovery-link" target="_blank" rel="noopener noreferrer">Worker bei Cloudflare prüfen ↗</a></div><button id="retry" class="secondary" hidden type="button">Neu beginnen</button></section></main>
-<footer><p>Dieser Installer erhält keine Wolke-Passwörter. Cloudflare-Zugangsdaten bleiben serverseitig und werden nach der Bereitstellung, bei einem Fehler oder spätestens nach einer Stunde aus der Sitzung gelöscht.</p></footer></body></html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="PAC ist der Reiseplan für Klassen- und Studienfahrten: Wochenplan, Rechnungen, Budget, Dateien und Offline-Modus. Kostenlos im eigenen Cloudflare-Konto, Daten in der eigenen Nextcloud."><meta name="theme-color" content="#fbfcfa"><link rel="icon" href="/logo.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/logo.png"><script src="/theme.js"></script><title>PAC – Der Reiseplan für Ihre Fahrt</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/home.css"></head>
+<body class="home">
+<header class="home-header"><a href="/" class="wordmark" aria-label="PAC – Profilreise am Christianeum, Startseite"><span class="pac-letters" aria-hidden="true">P<span class="pac-expand">rofilreise&nbsp;</span><span class="pac-a">A</span><span class="pac-expand">m&nbsp;</span>C<span class="pac-expand">hristianeum</span><span class="pac-dot">.</span></span></a><nav class="home-nav" aria-label="Hauptnavigation"><a href="#funktionen">Funktionen</a><a href="#ablauf">So funktioniert’s</a><a href="/info">Über PAC</a><a href="https://github.com/FinCreeper1/PAC" target="_blank" rel="noopener noreferrer">Quellcode ↗</a></nav><div class="header-actions"><button type="button" class="theme-toggle" aria-label="Dunkles Design" aria-pressed="false" hidden></button><a href="/app" class="button login" aria-label="PAC verwalten" title="PAC verwalten"><span class="login-label">PAC verwalten</span><svg class="login-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v16h-6M4 12h11m-4-4 4 4-4 4"/></svg></a></div></header>
+
+<main>
+<section class="hero">
+ 
+ <h1>Die ganze Fahrt.<br><span>Auf einen Blick.</span></h1>
+ <p class="lead">PAC bündelt Programm, Bahnverbindungen, Dateien und Notizen in einem Reiseplan, den alle Teilnehmenden auf dem Handy dabeihaben. Nach vorherigem Speichern sind Plan und ausgewählte Dateien auch ohne Netz lesbar.</p>
+ <div class="hero-actions"><a href="/app" class="button cta">PAC erstellen</a><a href="https://pac-demo.linusleupold.workers.dev/" class="button secondary">Demo anschauen</a></div>
+ <div class="hero-notes">
+  <p class="hero-note">PAC ist kostenlos. <a href="/info">Voraussetzungen &amp; Betriebskosten</a></p>
+  <p class="hero-note">Sie reisen mit? PAC-Link und Teilnehmerpasswort erhalten Sie von Ihrer Reiseleitung.</p>
+ </div>
+</section>
+
+<section class="showcase" aria-label="Produktansicht">
+ <figure class="browser">
+  <div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span>pac-studienfahrt-berlin.workers.dev</span></div>
+  <img class="shot-light" src="/shot-desktop.png" width="1600" height="1111" alt="PAC-Reiseplan einer Studienfahrt nach Berlin mit Countdown bis zum nächsten Termin und Wochenansicht über drei Tage">
+  <img class="shot-dark" src="/shot-desktop-dark.png" width="1600" height="1111" alt="" aria-hidden="true">
+ </figure>
+ <figure class="phone"><img class="shot-light" src="/shot-mobile.png" width="780" height="1688" alt="Mobile Ansicht mit dem heutigen Tag und dem nächsten Termin"><img class="shot-dark" src="/shot-mobile-dark.png" width="780" height="1688" alt="" aria-hidden="true"></figure>
+</section>
+
+<section id="funktionen" class="features" aria-labelledby="features-title">
+ <h2 id="features-title">Alles, was unterwegs zählt.</h2>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="shot crop-grid"><img class="shot-light" src="/shot-desktop.png" width="1600" height="1111" alt="Wochenraster der Studienfahrt mit Terminen an drei Tagen" loading="lazy"><img class="shot-dark" src="/shot-desktop-dark.png" width="1600" height="1111" alt="" aria-hidden="true" loading="lazy"></div></figure>
+  <div class="feature-copy"><span class="feature-num">01</span><h3>Wochenplan im Überblick</h3><p>Alle Programmpunkte der Fahrt in einem klaren Raster, farblich nach Art sortiert. So sieht jeder sofort, was wann und wo passiert.</p><ul class="checks"><li>Mehrtägige Wochenansicht</li><li>Ort und Uhrzeit an jedem Termin</li><li>Hell- und Dunkelmodus</li></ul></div>
+ </article>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="mini-phone"><img class="shot-light" src="/shot-mobile.png" width="780" height="1688" alt="Heute-Ansicht auf dem Handy mit Countdown und nächstem Termin" loading="lazy"><img class="shot-dark" src="/shot-mobile-dark.png" width="780" height="1688" alt="" aria-hidden="true" loading="lazy"></div></figure>
+  <div class="feature-copy"><span class="feature-num">02</span><h3>Heute-Ansicht mit Countdown</h3><p>Auf dem Handy zeigt PAC den aktuellen Tag als Agenda und zählt bis zum nächsten Programmpunkt herunter. So bleibt der nächste Programmpunkt im Blick.</p><ul class="checks"><li>Countdown zum nächsten Termin</li><li>Tagesagenda für unterwegs</li><li>Als App auf dem Homescreen</li></ul></div>
+ </article>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="mock mock-offline" aria-hidden="true"><div class="mock-status"><span class="dot"></span>Kein Netz · Flugmodus</div><div class="mock-card"><b>Offline verfügbar</b><small>Plan und 14 Dateien auf diesem Gerät</small><div class="bar"><i></i></div></div><div class="mock-legend"><span>✕ Noch nicht gespeichert</span><span>✓ Teilweise gespeichert</span><span class="ok">✓✓ Offline verfügbar</span></div></div></figure>
+  <div class="feature-copy"><span class="feature-num">03</span><h3>Offline verfügbar</h3><p>Öffnen Sie den Plan vorher online und laden Sie die gewünschten Unterlagen unter „Unterlagen offline“ herunter. Diese Inhalte bleiben auf diesem Gerät ohne Netz lesbar. Laden Sie den Plan bei bestehender Internetverbindung neu, um Änderungen zu sehen.</p><ul class="checks"><li>Speicherstatus auf einen Blick</li><li>Dateien direkt am Gerät</li><li>Aktuellen Stand online neu laden</li></ul></div>
+ </article>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="mock mock-event" aria-hidden="true"><small class="time">08:00–10:00</small><b class="title">ICE nach Berlin</b><small>Hamburg Hbf → Berlin Hbf</small><ol class="stops"><li><span>08:00</span>Hamburg Hbf</li><li><span>08:52</span>Ludwigslust</li><li><span>09:58</span>Berlin Hbf</li></ol><div class="files"><span>📄 Gruppenticket.pdf</span><span>🗺️ Route zum Hostel</span><span>📝 Sitzplätze</span></div></div></figure>
+  <div class="feature-copy"><span class="feature-num">04</span><h3>Bahnverbindungen, Karten &amp; Dateien</h3><p>Verbindungen mit allen Zwischenhalten, Karten mit dem Routenverlauf und Tickets oder Präsentationen hängen direkt am Termin. Gespeichert in Ihrer eigenen Nextcloud.</p><ul class="checks"><li>Zwischenhalte und Gleise</li><li>Routenkarten</li><li>Dateien in Ihrer Nextcloud</li></ul></div>
+ </article>
+ <article class="feature-row">
+  <div class="feature-visual"><div class="mock"><b>Rechnungen &amp; Budget</b><p>Hostel · 1.860,00 €</p><p>Anzahlung: 600,00 € · Restbetrag: 1.260,00 €</p><p>Teilbezahlt</p></div></div>
+  <div class="feature-copy"><span class="feature-num">05</span><h3>Reisekosten im Griff</h3><p>Für die Reiseleitung: Gesamtausgaben, verbleibendes Budget und Kosten pro Schüler auf einen Blick. Offene Belege, Teilzahlungen und Restbeträge bleiben nachvollziehbar.</p><ul class="checks"><li>Budget und Kosten pro Schüler</li><li>Belege mit bezahltem Betrag und Restbetrag</li><li>CSV-Export für die Abrechnung</li></ul><p><a href="https://pac-demo.linusleupold.workers.dev/admin/">Rechnungen in der Demo ausprobieren</a></p></div>
+ </article>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="mock mock-cal" aria-hidden="true"><b>Kalender verknüpfen</b><small>Änderungen beim nächsten Kalenderabruf.</small><code>webcal://pac-studienfahrt-berlin…/kalender.ics</code><div class="cal-apps"><span>Apple</span><span>Google</span><span>Outlook</span></div><div class="cal-event"><i></i><div><b>Museumsinsel</b><small>Di., 07.05. · 09:00–12:00</small></div></div></div></figure>
+  <div class="feature-copy"><span class="feature-num">06</span><h3>Kalender-Abo</h3><p>Ein Link genügt: Apple-, Google- oder Outlook-Kalender übernehmen das Programm. Änderungen erscheinen beim nächsten Abruf Ihrer Kalender-App; das kann verzögert geschehen.</p><ul class="checks"><li>Ein Link für alle Kalender</li><li>Aktualisierung durch die Kalender-App</li><li>Kein Konto für Teilnehmende</li></ul></div>
+ </article>
+ <article class="feature-row">
+  <figure class="feature-visual"><div class="mock mock-admin" aria-hidden="true"><div class="admin-bar"><span>↶</span><span>↷</span><em>2 Änderungen</em><b>Veröffentlichen</b></div><div class="admin-grid"><div class="slot a">09:00 Museumsinsel</div><div class="slot b drag">12:00 Mittagessen</div><div class="slot c">14:00 Workshop</div></div></div></figure>
+  <div class="feature-copy"><span class="feature-num">07</span><h3>Admin mit Drag &amp; Drop</h3><p>Termine einfach verschieben, Rückgängig machen und erst dann für alle veröffentlichen, wenn alles passt. Geschützt mit eigenem Admin-Passwort.</p><ul class="checks"><li>Verschieben per Drag &amp; Drop</li><li>Rückgängig und Wiederholen</li><li>Eigenes Admin-Passwort</li></ul></div>
+ </article>
+</section>
+
+<section id="ablauf" class="how" aria-labelledby="how-title">
+ <div><h2 id="how-title">Schritt für Schritt zum Reiseplan.</h2><p class="lead">Der Installer richtet PAC in Ihrem Konto ein und hält es später mit einem Klick aktuell.</p></div>
+ <ol class="how-steps">
+  <li><h3>Bei Cloudflare anmelden</h3><p>Direkt bei Cloudflare, ohne Passwort hier einzugeben.</p></li>
+  <li><h3>Reise benennen</h3><p>Aus dem Namen entsteht die Adresse, etwa pac-berlin-2027.</p></li>
+  <li><h3>Wolke verbinden</h3><p>Passwörter festlegen, Nextcloud verbinden und den Link teilen.</p></li>
+ </ol>
+</section>
+
+<section class="closing"><h2>Bereit für die nächste Fahrt?</h2><p>Ihr Plan, Ihr Konto, Ihre Daten.</p><div class="hero-actions"><a href="/app" class="button cta">PAC erstellen</a><a href="/app" class="button secondary">Bestehendes PAC verwalten</a></div></section>
+</main>
+<footer><p>PAC ist quelloffen. <a href="/info">Über PAC &amp; Voraussetzungen</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/FinCreeper1/PAC" target="_blank" rel="noopener noreferrer">Quellcode auf GitHub ↗</a></p></footer>
+</body></html>

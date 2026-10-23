@@ -10,3 +10,8 @@ NEXTCLOUD_WEBDAV_URL=https://cloud.example.org/remote.php/dav/files/your-user
 NEXTCLOUD_USERNAME=your-user
 NEXTCLOUD_APP_PASSWORD=replace-with-nextcloud-app-password
 NEXTCLOUD_ROOT=Profilreise
+
+# Transitous bleibt deaktiviert, bis die Voraussetzungen in installer/README.md erfüllt sind.
+# Erst danach beide Werte setzen; Kontakt durch eigene erreichbare Adresse ersetzen.
+# TRANSITOUS_USAGE_CONFIRMED=true
+# TRANSITOUS_CONTACT=https://example.org/contact

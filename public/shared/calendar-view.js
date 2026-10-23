@@ -106,7 +106,10 @@ globalThis.CalendarView = (() => {
       today = CalendarModel.localDate();
     grid.style.setProperty("--schedule-duration", `${bounds.duration}px`);
     grid.style.gridTemplateColumns = `50px repeat(${calendar.days.length}, minmax(120px, 1fr))`;
-    grid.append(text("div", ""));
+    const corner = text("div", "");
+    corner.className = "shared-day-head shared-corner";
+    corner.setAttribute("aria-hidden", "true");
+    grid.append(corner);
     for (const day of calendar.days) {
       const head = text("strong", CalendarModel.dayLabel(day));
       head.className = "shared-day-head";
@@ -145,9 +148,26 @@ globalThis.CalendarView = (() => {
         if (entry.overlay) rendered.classList.add("inset-event");
         column.append(rendered);
       }
+      if (day.isoDate === today) nowLine(column, calendar, bounds);
       options.column?.(column, index + 1);
       grid.append(column);
     });
+  }
+  // Red line at the current time in today's column, moved once a minute.
+  function nowLine(column, calendar, bounds) {
+    const line = text("div", "");
+    line.className = "shared-now-line";
+    line.setAttribute("aria-hidden", "true");
+    const place = () => {
+      if (!line.isConnected && line.dataset.placed) return clearInterval(timer);
+      const minute = CalendarModel.current(calendar).minute - bounds.start;
+      line.hidden = minute < 0 || minute > bounds.duration;
+      line.style.top = `${minute}px`;
+      line.dataset.placed = "1";
+    };
+    const timer = setInterval(place, 60000);
+    place();
+    column.append(line);
   }
   function agenda(list, calendar, day, options = {}) {
     list.replaceChildren();

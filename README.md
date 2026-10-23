@@ -14,6 +14,10 @@ Der Installer führt dich durch die Einrichtung deiner eigenen PAC-Instanz auf C
 - **Unterwegs:** Offline-Funktionen und Kalenderabos.
 - **Verwaltung:** Eigener Admin-Bereich für die Reiseleitung.
 
+## Quellcode
+
+Der vollständige **[Installer-Quellcode](installer/)** enthält die Website, die Cloudflare-Anmeldung, die Bereitstellung und Updates sowie Tests und eine Build-Anleitung.
+
 ## Installation
 
 Am einfachsten startest du über den **[Installer](https://profilfahrt.linusfin.de/install)**. Halte dafür dein Cloudflare-Konto und die Zugangsdaten zu deinem Nextcloud-Speicher bereit.
@@ -30,10 +34,11 @@ Alternativ kannst du die Vorlage direkt über Cloudflare bereitstellen:
 ## Architektur
 
 - `public/`: Portal, Administration, PWA und Ausgangsdaten. Nur dieser Ordner wird als Asset veröffentlicht; Konfiguration und Zugangsdaten bleiben privat.
-- `src/index.js`: Routing, getrennte Anmeldungen, Administration, Kalender, gemeinsame Notizen, Ortssuche, Offline-Manifest und signierte Kalenderabos.
+- `src/index.js`: Routing und Anfragekoordination. `sessions.js` verwaltet Sitzungswiderruf, `configuration.js` die verschlüsselten Zugänge, `trip-settings.js` Reiseeinstellungen, `admin-calendar.js` die Kalenderveröffentlichung und `invoices.js` Belege.
+- `public/admin/`: Kalendereditor, Rechnungen und Einstellungen liegen in getrennten Skripten; `public/shared/material-upload.js` enthält den Upload-Transport.
 - `src/nextcloud.js`: WebDAV-Adapter mit derselben Ordnerstruktur und denselben Textschlüsseln wie `php/NextcloudStorage.php`. Upload und Download werden gestreamt. XML-Antworten werden mit einem Parser auf Namespaces, Statuscodes und zulässige Pfade geprüft. Zugangsdaten werden nicht an Weiterleitungsziele gesendet.
 - `src/ideas.js`: vorhandenes `ideas:board` mit Autor, Datum, Freizeitfenster und Teilnahmeliste; kompatibel zum aktuellen PHP-Backend und zum vorhandenen Ideen-Frontend.
-- `PORTAL`: ein Durable Object koordiniert gleichzeitige Anfragen. Sein Speicher enthält technische Admin-Sitzungen, den Ortssuchcache mit Ablaufzeit und bei Einrichtung über das App-Formular die verschlüsselte Zugangskonfiguration. Kalender, Routen, Ideen, Notizen und Dateien werden nicht im Durable Object gespeichert.
+- `PORTAL`: ein Durable Object serialisiert verändernde Anfragen; Leseanfragen besitzen eigenen Anfragezustand und laufen unabhängig davon. Ein generationsgeschützter Kurzzeitcache verhindert, dass verspätete Leseantworten nach einem Schreibvorgang einen alten Stand zurücklegen. Sein Speicher enthält technische Admin-Sitzungen, den Ortssuchcache mit Ablaufzeit und bei Einrichtung über das App-Formular die verschlüsselte Zugangskonfiguration. Kalender, Routen, Ideen, Notizen und Dateien werden nicht im Durable Object gespeichert.
 - `assets.run_worker_first: true`: Die Anmeldung wird vor statischen Abrufen geprüft.
 
 R2, D1 und Cloudflare-KV werden nicht benötigt. Das Durable Object bleibt die zentrale Koordination für einen Portal-Worker. Der Objektname `portal-v1` bleibt bei Deployments gleich.
@@ -121,7 +126,7 @@ Wenn in der Wolke noch kein aktueller `calendar:snapshot` existiert, kann ein zu
 
 ```sh
 WORKER_URL=https://your-worker.workers.dev ADMIN_PASSWORD='...' \
-  node scripts/import-calendar.mjs ../data/admin-calendar.json
+  node scripts/import-calendar.mjs ../old/data/admin-calendar.json
 ```
 
 Das Skript liest Revision und CSRF-Schlüssel vor dem Schreiben. Referenzierte Routen müssen bereits im Wolken-Snapshot oder unter `public/data/routes/` vorhanden sein oder als `mapRoute` im Kalender enthalten sein. Der reguläre Zugriff auf einen vorhandenen Wolken-Snapshot benötigt diesen Import nicht.
@@ -132,7 +137,7 @@ Das Skript liest Revision und CSRF-Schlüssel vor dem Schreiben. Referenzierte R
 - Konkurrierende gemeinsame Notizen melden HTTP 409. Der vorhandene Editor unterstützt die manuelle Zusammenführung.
 - Bei einer nicht erreichbaren Wolke stehen vorhandene Browser-Offlinedaten weiterhin zur Verfügung; neue serverseitige Schreibvorgänge werden nicht als erfolgreich bestätigt.
 - Apple Maps, die OpenStreetMap-Ortssuche und Bahn-Liveinformationen benötigen weiterhin die jeweiligen externen Dienste. Apple Maps benötigt ein gültiges Token.
-- Cloudflare- und Nextcloud-Limits gelten weiter; Dateilisten mit vielen Metadatendateien erzeugen mehrere WebDAV-Unteranfragen.
+- Cloudflare- und Nextcloud-Limits gelten weiter. Dateilisten laden Metadaten in Gruppen mit höchstens vier parallelen Abrufen; die Anzahl der WebDAV-Unteranfragen bleibt proportional zur Dateizahl.
 
 ## Prüfung
 
@@ -155,11 +160,11 @@ Diese optionale Prüfung veröffentlicht den Testkalender erneut und legt eine T
 
 ## Bestehende Instanz aktualisieren
 
-Für den vorbereiteten manuellen Update-Weg mit Erhalt der Worker-Variablen siehe [UPDATING.md](UPDATING.md). Der Installer erstellt weiterhin neue Instanzen.
+Im Adminbereich unter Einstellungen zeigt PAC die installierte und die verfügbare Version. „PAC aktualisieren“ öffnet den Installer; nach Cloudflare-Anmeldung und Auswahl der vorhandenen Instanz ersetzt er deren Code und prüft die Aktivierung. Der manuelle CLI-Weg bleibt verfügbar; beide Wege und ihre Prüfgrenzen stehen in [UPDATING.md](UPDATING.md).
 
 ## Einrichtung direkt in PAC
 
-Neue Installer-Instanzen erhalten einen persönlichen Einrichtungslink. Öffne ihn, lege unterschiedliche Portal-/Adminpasswörter mit mindestens 12 Zeichen fest und trage WebDAV-Adresse, Benutzername, App-Passwort und Wolke-Ordner ein. „Einrichtung abschließen“ prüft den Lese-/Schreibzugriff mit einer temporären Datei, speichert die Konfiguration und öffnet PAC angemeldet. Sitzungsschlüssel und Kalendergeheimnis werden automatisch erzeugt.
+Neue Installer-Instanzen erhalten einen persönlichen Einrichtungslink. Öffne ihn, lege unterschiedliche Portal-/Adminpasswörter mit mindestens 6 Zeichen (längere Passwörter empfohlen) fest und trage WebDAV-Adresse, Benutzername, App-Passwort und Wolke-Ordner ein. „Einrichtung abschließen“ prüft den Lese-/Schreibzugriff mit einer temporären Datei, speichert die Konfiguration und öffnet PAC angemeldet. Sitzungsschlüssel und Kalendergeheimnis werden automatisch erzeugt.
 
 Die Konfiguration liegt AES-GCM-verschlüsselt im eigenen Durable Object. Der Schlüssel wird aus dem Worker-Secret PAC_SETUP_SECRET abgeleitet. Dieses Secret bei Updates und Sicherungen unbedingt erhalten; ohne es lässt sich die gespeicherte Konfiguration nicht mehr lesen. Die Reiseinhalte bleiben in Nextcloud. Manuell gesetzte Worker-Variablen/Secrets haben Vorrang vor Formularwerten.
 
@@ -168,5 +173,61 @@ Der persönliche Link enthält einen geheimen Token im URL-Fragment. Er wird bei
 ### Reisedaten im Setup
 
 Wähle zwischen einer neuen Reise und der Übernahme einer vorhandenen Wolken-Reise. Neue Reisen benötigen Titel, Beginn, Ende, Startort und Ziel; Teilnehmende werden optional zeilenweise eingetragen. Der Kalender startet ohne Demo-Termine mit genau den ausgewählten Tagen. Bei einer bereits gespeicherten Reise bricht „Neue Reise“ ohne Überschreiben ab; mit „Vorhandene Reise übernehmen“ bleiben Kalender, Dateien und Metadaten unverändert. Die Login-Seite verwendet anschließend die Reisedaten aus der Wolke.
+
+### Einstellungen nach der Einrichtung
+
+Im Admin-Tab „Einstellungen“ lassen sich Reisetitel, Zeitraum, Start, Ziel,
+Zeitzone und Teilnehmende sowie der Kartenanbieter ändern. Tage mit vorhandenen
+Terminen können nicht entfernt werden. Nach Änderungen der Reisedaten die Seite
+vor der weiteren Kalenderbearbeitung neu laden.
+
+Bei Installationen mit App-Einrichtung können dort auch Portal- und
+Adminpasswort sowie WebDAV-Zugang und Wolke-Ordner geändert werden. Leere
+Passwortfelder behalten ihre bisherigen Werte. Zugangsdaten werden verschlüsselt
+im eigenen Durable Object gespeichert; bestehende Passwörter werden nie an das
+Formular zurückgegeben. Cloudflare-Variablen haben weiterhin Vorrang und müssen
+bei Bedarf im Cloudflare-Dashboard geändert werden. Ein Speicherwechsel setzt
+voraus, dass der vollständige Reiseordner zuvor kopiert wurde und dieselbe
+Reise-ID enthält. Sitzungs- und Kalenderabo-Geheimnisse bleiben erhalten.
+
+Die aktuelle Domain wird gesperrt angezeigt. Custom Domains werden über den
+verlinkten Cloudflare-Bereich verwaltet. Der Update-Manager bietet Links zu
+Änderungen und zur Update-/Rollback-Anleitung. Die Versionsprüfung erfolgt über den Installer. Die Installation benötigt eine Cloudflare-Anmeldung und die Auswahl der vorhandenen Instanz; sie läuft anschließend mit Aktivierungsprüfung. Bei einem nicht erreichbaren Versionsdienst bleibt der manuelle Einstieg möglich.
+
+
+## Sitzungen und Geräte
+
+Teilnehmer-Sitzungen laufen nach 14 Tagen ohne Onlineaktivität ab; Admin-Sitzungen nach zwei Stunden und werden bei aktiver Nutzung verlängert. Unter Einstellungen → „Alle Geräte abmelden“ kann die Reiseleitung beide Rollen zentral abmelden. Passwortänderungen über das Formular beenden ebenfalls sämtliche Sitzungen; bei Änderungen über Cloudflare verlieren die Sitzungen der jeweils geänderten Rolle ihre Gültigkeit. Kalenderabo-Geheimnisse werden beim formularbasierten Passwortwechsel und beim Gerätewiderruf erhalten.
+
+Die neue Sitzungsbindung erfordert beim ersten Update von einer älteren Version eine erneute Anmeldung. Bereits offline gespeicherte Inhalte auf fremden Geräten können ohne Verbindung nicht aus der Ferne gelöscht werden. Erkennt der Service Worker beim nächsten geschützten Onlineabruf eine abgelaufene Sitzung, löscht er die Offline-Caches.
+
+## Dateiuploads und Größenlimits
+
+Materialien werden einzeln als binärer HTTP-`PUT` vom Browser an `/api/materials?project=…` gesendet und vom Worker an Nextcloud gestreamt. Kleine Header enthalten Dateiname, Portal- und Löschpasswort; der Dateiinhalt liegt im Request-Body. Rechnungsbelege verwenden denselben Streaming-Ansatz, haben zusätzlich eine Anwendungsgrenze von 25 MiB und benötigen eine Admin-Sitzung mit CSRF-Schlüssel.
+
+Cloudflare Free/Pro begrenzt den Request-Body auf 100 MB; eine kleinere konfigurierte Grenze oder Nextcloud-Limits können früher greifen. Die gesamte Headergröße ist separat auf 128 KB begrenzt. Streaming reduziert den Speicherbedarf des Workers, umgeht aber die Body-Grenze nicht. Eine Datei ist derzeit eine Anfrage, ohne Chunking oder Wiederaufnahme. Eine Ablehnung mit HTTP 413 wird im Uploadformular erläutert. Mehrere Dateien werden nacheinander einzeln übertragen.
+
+Quelle: [Cloudflare Request-/Response-Limits](https://developers.cloudflare.com/workers/platform/limits/#request-and-response-limits).
+
+## Automatische und lokale Prüfungen
+
+Die GitHub-Actions-Pipeline `.github/workflows/verify.yml` führt auf Push und Pull Request beide Testsuiten, beide HTTP-Runtime-Prüfungen, die Prüfung des bereinigten Templates und beide Dry-Run-Builds aus. Sie benötigt keine Produktions-Secrets und führt keine Deployments oder visuellen Tests aus.
+
+```sh
+npm test
+npm run test:runtime
+npm test --prefix installer
+npm run test:runtime --prefix installer
+npm run build
+npm run build --prefix installer
+```
+
+Die Runtime-Prüfungen starten automatisch eine lokale workerd-Instanz mit isoliertem Speicher in einem temporären Verzeichnis. Nextcloud und Cloudflare-OAuth/-Deployment werden simuliert. Der Worker-Test schickt echte HTTP-Dateibytes durch Durable Object und FixedLengthStream und prüft Download, Kalenderkonflikte und Sitzungswiderruf. Das ersetzt keinen produktiven OAuth-Durchlauf oder Lasttest gegen einen realen Nextcloud-Server.
+
+## Beschädigte Textdaten wiederherstellen
+
+Fehlende Notiz- oder Budgetdokumente erhalten weiterhin einen leeren Anfangszustand. Ungültiges JSON oder ungültige Feldtypen führen dagegen zu HTTP 503 mit `stored_data_corrupt`; Lesen und Speichern bleiben gesperrt, damit die Originaldatei erhalten bleibt.
+
+Zur Wiederherstellung die betroffene Datei unter `<root>/text/` zuerst separat sichern. Der Dateiname ist SHA-256 des Schlüssels `shared-note:<eventId>` beziehungsweise `invoices:budget`, gefolgt von `.txt`. Eine gültige frühere Version über Nextcloud-Versionen oder eine Wolke-Sicherung wiederherstellen und danach erneut laden. Die Datei nicht als Reparatur löschen: Das würde den gespeicherten Inhalt entfernen. PAC legt dafür keine automatische zusätzliche Sicherung an.
 
 </details>

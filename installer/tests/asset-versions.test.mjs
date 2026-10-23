@@ -23,3 +23,13 @@ test('external and unbundled URLs are left unchanged',()=>{
  const assets={'/index.html':encode(html)};versionAssets(assets);
  assert.equal(Buffer.from(assets['/index.html'],'base64').toString(),html);
 });
+test('patching CSS refreshes an already versioned stylesheet URL',()=>{
+ const assets={'/admin/index.html':encode('<link href="/admin/admin.css?v=abc123">'),'/admin/admin.css':encode('body{}')};
+ versionAssets(assets);
+ const first=assets['/admin/index.html'];
+ assets['/admin/admin.css']=encode('body{display:grid}');
+ versionAssets(assets);
+ assert.notEqual(assets['/admin/index.html'],first);
+ const updated=assets['/admin/index.html'];versionAssets(assets);
+ assert.equal(assets['/admin/index.html'],updated);
+});
