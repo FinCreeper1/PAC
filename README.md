@@ -1,14 +1,31 @@
-# PAC · Cloudflare Worker mit Wolke-Speicher
+# PAC · Dein Portal für die Profilfahrt
 
-**[PAC einrichten – ohne GitHub-Verknüpfung](https://pac-install.linusleupold.workers.dev)**
+Termine, Reiseunterlagen und gemeinsame Planung an einem Ort – für Teilnehmende und Reiseleitung.
 
-Die direkte Cloudflare-Anmeldung wird derzeit freigeschaltet. Anschließend wählen Nutzer ihr eigenes Konto und bestätigen die Erstellung eines PAC-Workers. GitHub ist dafür nicht erforderlich. Details zur noch nötigen OAuth-Registrierung stehen in `installer/README.md`.
+**[PAC mit dem Installer einrichten →](https://profilfahrt.linusfin.de/install)**
+
+Der Installer führt dich durch die Einrichtung deiner eigenen PAC-Instanz auf Cloudflare. Eine GitHub-Verknüpfung ist dafür nicht erforderlich. Dateien und Reisedaten werden in deinem Nextcloud-Speicher („Wolke“) abgelegt.
+
+## Was PAC bietet
+
+- **Reiseplan:** Termine, Orte und Bahnverbindungen im gemeinsamen Kalender.
+- **Unterlagen:** Dateien zu Terminen und gemeinsame Notizen.
+- **Gemeinsame Planung:** Ideen sammeln und darüber abstimmen.
+- **Unterwegs:** Offline-Funktionen und Kalenderabos.
+- **Verwaltung:** Eigener Admin-Bereich für die Reiseleitung.
+
+## Installation
+
+Am einfachsten startest du über den **[Installer](https://profilfahrt.linusfin.de/install)**. Halte dafür dein Cloudflare-Konto und die Zugangsdaten zu deinem Nextcloud-Speicher bereit.
+
+Alternativ kannst du die Vorlage direkt über Cloudflare bereitstellen:
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FFinCreeper1%2FPAC)
 
-Öffentliche Vorlage: [FinCreeper1/PAC](https://github.com/FinCreeper1/PAC). Der Button startet die Einrichtung im eigenen Cloudflare-Konto.
+## Technische Dokumentation
 
-Portal und API laufen als JavaScript auf Cloudflare Workers. Dateien und Anwendungsdaten bleiben im vorhandenen Nextcloud-Speicher („Wolke“) und werden per WebDAV gelesen und geschrieben. PHP und Hetzner werden von dieser Variante nicht für die Ausführung benötigt.
+<details>
+<summary>Architektur, lokale Entwicklung und manuelle Bereitstellung</summary>
 
 ## Architektur
 
@@ -151,3 +168,5 @@ Der persönliche Link enthält einen geheimen Token im URL-Fragment. Er wird bei
 ### Reisedaten im Setup
 
 Wähle zwischen einer neuen Reise und der Übernahme einer vorhandenen Wolken-Reise. Neue Reisen benötigen Titel, Beginn, Ende, Startort und Ziel; Teilnehmende werden optional zeilenweise eingetragen. Der Kalender startet ohne Demo-Termine mit genau den ausgewählten Tagen. Bei einer bereits gespeicherten Reise bricht „Neue Reise“ ohne Überschreiben ab; mit „Vorhandene Reise übernehmen“ bleiben Kalender, Dateien und Metadaten unverändert. Die Login-Seite verwendet anschließend die Reisedaten aus der Wolke.
+
+</details>
